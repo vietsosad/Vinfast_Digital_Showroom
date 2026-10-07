@@ -1,0 +1,21 @@
+# Render Blueprint Specification File (render.yaml)
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: vinfast-digital-showroom
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./data/vinfast.db
+      - key: CORS_ORIGINS
+        value: "*"
