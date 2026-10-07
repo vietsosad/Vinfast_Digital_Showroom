@@ -1,75 +1,99 @@
-# VinFast Digital Showroom
+# VinFast Digital Showroom — Backend Pha 1
 
-Backend showroom số gồm danh mục ô tô/xe máy điện, yêu cầu báo giá, đặt lịch lái thử, CRM gọn nhẹ và chat thời gian thực giữa khách hàng với nhân viên. Sản phẩm không dùng chatbot, mô hình ngôn ngữ, vector database hoặc API key của bên thứ ba.
+Đây là bản phát hành **backend tối giản** của VinFast Digital Showroom phục vụ Pha 1 môn Kiến trúc phần mềm. Repository hiện tập trung vào API, nghiệp vụ, kiểm thử và tài liệu kiến trúc; chưa chứa toàn bộ sản phẩm hoàn chỉnh.
 
-Pha 1 của môn Kiến trúc phần mềm chỉ đánh giá backend. Thư mục `frontend/` được giữ làm client tham khảo cho API, không nằm trong artefact Docker hoặc tiêu chí nghiệm thu Pha 1.
+## Phạm vi hiện đã public
 
-## Phạm vi sản phẩm
+- REST API và WebSocket xây dựng bằng FastAPI.
+- Xác thực JWT và phân quyền `customer`, `consultant`, `admin`.
+- API danh mục ô tô và xe máy điện.
+- Yêu cầu báo giá, đặt lịch lái thử và hồ sơ khách hàng.
+- Tính chi phí sở hữu (TCO).
+- Chat thời gian thực giữa khách hàng và nhân viên; không sử dụng chatbot hoặc mô hình ngôn ngữ.
+- SQLite cho local, hỗ trợ PostgreSQL qua `asyncpg`.
+- Unit/integration test, Docker và cấu hình triển khai Render.
+- Tài liệu API, kiến trúc và kế hoạch Pha 1 trong `docs/`.
 
-Ba vai trò được hỗ trợ:
+## Chưa có trong bản public này
 
-- `customer`: xem xe, so sánh, tính chi phí sở hữu, tạo báo giá/lịch lái thử và chat với nhân viên.
-- `consultant`: xử lý báo giá, lịch lái thử, hồ sơ khách hàng và hàng đợi hội thoại.
-- `admin`: toàn bộ quyền của nhân viên, quản lý tài khoản và dữ liệu danh mục.
+Các thành phần sau vẫn được giữ trong dự án nội bộ và sẽ chỉ được bổ sung khi cần:
 
-Chat hỗ trợ được lưu trong database. REST API dùng để tải lịch sử và gửi tin tin cậy; WebSocket phát sự kiện mới theo thời gian thực. Pha 1 dùng bộ quản lý kết nối trong một process, phù hợp demo và kiểm thử trên một máy.
+- Giao diện `frontend/`.
+- Ảnh, video và các media tĩnh của showroom.
+- Dữ liệu catalog/seed và các script import, seed, load test.
+- Database và dữ liệu runtime.
+
+Vì vậy, repository này hiện phù hợp để đọc kiến trúc, chạy API, kiểm thử backend và phát triển nghiệp vụ; chưa phải bản showroom đầy đủ có giao diện và dữ liệu sản phẩm hoàn chỉnh.
 
 ## Kiến trúc
 
 ```text
-Swagger / HTTP client
-    │  JSON/REST + WebSocket
-    ▼
-FastAPI API layer          backend/src/api/
-    │  gọi use case
-    ▼
-Business layer             backend/src/services/support_chat.py
-    │  ConversationRepository (Protocol)
-    ▼
-Data access layer          backend/src/repositories/support_chat.py
-    │
-    ▼
+HTTP client / Swagger / WebSocket
+                │
+                ▼
+FastAPI adapters             backend/src/api/
+                │
+                ▼
+Business services            backend/src/services/
+                │
+                ▼
+Repository adapters          backend/src/repositories/
+                │
+                ▼
 SQLAlchemy → SQLite hoặc PostgreSQL
 ```
 
-`SupportChatService` là lõi nghiệp vụ của phạm vi mới. Module này không import FastAPI hoặc SQLAlchemy; kiểm thử unit chạy với repository in-memory. Xác thực JWT và phân quyền được đặt tại dependency dùng chung, không lặp logic đọc token trong từng endpoint.
+Nghiệp vụ được tách khỏi lớp HTTP và data access. Chi tiết xem tại [Tài liệu kiến trúc](docs/ARCHITECTURE.md).
 
-Chi tiết quyết định kiến trúc: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+## Cấu trúc repository
+
+```text
+api/                          entrypoint API tương thích môi trường serverless
+backend/src/api/              REST/WebSocket adapters
+backend/src/services/         business use cases
+backend/src/repositories/     data-access adapters
+backend/src/models/           ORM models và API schemas
+backend/tests/                unit/integration tests
+backend/Dockerfile            backend-only production image
+docs/                         tài liệu API và kiến trúc
+static/.gitkeep               placeholder; chưa public media
+docker-compose.yml            cấu hình chạy backend bằng Docker
+render.yaml                   cấu hình triển khai Render
+```
 
 ## Công nghệ
 
-- Backend: Python 3.10+, FastAPI, Pydantic, SQLAlchemy async.
-- Database: SQLite cho phát triển; PostgreSQL qua `asyncpg` cho môi trường dùng chung.
-- Client tham khảo: React 18, TypeScript, Vite, Tailwind CSS; không thuộc phạm vi Pha 1.
-- Realtime: WebSocket của FastAPI.
-- Kiểm thử: pytest, pytest-asyncio, HTTPX.
-- Đóng gói: Docker multi-stage, chạy bằng user không phải root.
+- Python 3.10+
+- FastAPI, Pydantic
+- SQLAlchemy async, SQLite/PostgreSQL
+- WebSocket
+- pytest, pytest-asyncio, HTTPX
+- Docker multi-stage
 
 ## Chạy local
 
-Backend:
+Yêu cầu Python 3.10 trở lên. Từ thư mục gốc repository:
 
 ```powershell
-Copy-Item .env.example .env
 Set-Location backend
+Copy-Item ..\.env.example .env
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python scripts/seed_catalog_from_frontend.py
 uvicorn src.main:app --reload --port 8000
 ```
 
-Nếu cần thử client tham khảo, chạy ở terminal khác:
+Sau khi server khởi động:
 
-```powershell
-cd frontend
-npm install
-npm run dev
-```
+- Swagger UI: `http://localhost:8000/docs`
+- OpenAPI JSON: `http://localhost:8000/openapi.json`
+- Health check: `http://localhost:8000/health`
 
-Mở `http://localhost:5173`. Swagger UI ở `http://localhost:8000/docs`, OpenAPI JSON ở `http://localhost:8000/openapi.json`.
+Ứng dụng tự tạo schema database khi khởi động. Do dữ liệu seed chưa nằm trong bản public này, danh mục ban đầu có thể trống.
 
-Tài khoản demo được tạo tự động nếu chưa tồn tại:
+## Tài khoản demo
+
+Trong môi trường development, các tài khoản sau được tạo tự động nếu chưa tồn tại:
 
 | Vai trò | Email | Mật khẩu |
 |---|---|---|
@@ -77,32 +101,19 @@ Tài khoản demo được tạo tự động nếu chưa tồn tại:
 | Nhân viên | `staff@vinfast.vn` | `staff123` |
 | Khách hàng | `customer@gmail.com` | `123456` |
 
-Các mật khẩu trên chỉ dùng cho local/demo. Đặt `APP_ENV=production` và thay `SECRET_KEY` bằng chuỗi ngẫu nhiên dài khi triển khai.
+Các mật khẩu này chỉ dùng cho local/demo. Khi triển khai production, đặt `APP_ENV=production` và cung cấp `SECRET_KEY` ngẫu nhiên có độ dài an toàn.
 
-## PostgreSQL
+## Chạy bằng Docker
 
-Đặt URL async trong `.env`, không commit thông tin xác thực:
-
-```dotenv
-DATABASE_URL=postgresql+asyncpg://user:password@host:5432/database
-```
-
-Ứng dụng tự tạo các bảng còn thiếu khi khởi động. Script seed catalog dùng upsert, không xóa dữ liệu đã có:
-
-```powershell
-Set-Location backend
-python scripts/seed_catalog_from_frontend.py
-```
-
-## Docker
+Từ thư mục gốc repository:
 
 ```powershell
 docker compose up --build
 ```
 
-Container chỉ đóng gói backend và phục vụ API tại `http://localhost:8000`; dữ liệu SQLite được lưu ở `./data`. File `.env` là tùy chọn cho local nhưng bắt buộc phải cung cấp `SECRET_KEY` riêng khi đặt `APP_ENV=production`.
+API được phục vụ tại `http://localhost:8000`. Dữ liệu SQLite runtime được tạo trong thư mục `data/` ở máy local và không được commit.
 
-## Kiểm thử và kiểm tra chất lượng
+## Kiểm thử và lint
 
 ```powershell
 Set-Location backend
@@ -110,14 +121,7 @@ pytest -q
 ruff check src tests
 ```
 
-Load test không cần cài thêm thư viện:
-
-```powershell
-Set-Location backend
-python scripts/load_test.py --base-url http://127.0.0.1:8000 --duration 120 --concurrency 20
-```
-
-Quy trình cố định cấu hình Kaggle CPU và cách báo cáo trước/sau nằm tại [docs/KAGGLE_LOAD_TEST.md](docs/KAGGLE_LOAD_TEST.md).
+Test suite hiện có 30 bài kiểm thử cho API, phân quyền, nghiệp vụ, contract và ranh giới kiến trúc.
 
 ## Tài liệu
 
@@ -126,28 +130,11 @@ Quy trình cố định cấu hình Kaggle CPU và cách báo cáo trước/sau 
 - [Phân công backend Pha 1](docs/PHASE1_BACKEND_ASSIGNMENT.md)
 - [Bản phân công one-page](docs/PHASE1_BACKEND_REPORT_ONE_PAGE.md)
 - [Kế hoạch Pha 1 và Pha 2](docs/PHASE_PLAN.md)
-- [Quy trình load test Kaggle](docs/KAGGLE_LOAD_TEST.md)
+- [Quy trình load test trên Kaggle](docs/KAGGLE_LOAD_TEST.md)
 
-## Cấu trúc chính
+## Lưu ý bảo mật
 
-```text
-backend/src/api/              HTTP/WebSocket adapters
-backend/src/services/         business use cases và dịch vụ ứng dụng
-backend/src/repositories/     data-access adapters
-backend/src/models/           ORM models và API schemas
-backend/tests/                unit/integration tests
-backend/scripts/              seed dữ liệu và load test
-backend/Dockerfile            backend-only production image
-data/                         catalog seed có thể review
-static/                       ảnh và tệp media do backend phục vụ
-docs/                         tài liệu chuẩn của sản phẩm
-frontend/src/                 client tham khảo, ngoài Pha 1
-```
-
-## Nhóm phát triển
-
-- Lê Hoàng Việt — Lead, kiến trúc và tích hợp.
-- Hoàng Lê Minh — backend nghiệp vụ, dữ liệu và kiểm thử tải.
-- Nguyễn Văn Toán — realtime chat, supporting API và kiểm thử tích hợp.
-
-Phân công theo deliverable và tiêu chí nghiệm thu được mô tả trong [docs/PHASE_PLAN.md](docs/PHASE_PLAN.md).
+- Không commit `.env`, database hoặc credential thật.
+- Đổi `SECRET_KEY` trước khi chạy production.
+- Không sử dụng các tài khoản demo cho dữ liệu thật.
+- Repository không yêu cầu API key của dịch vụ AI hoặc bên thứ ba.
