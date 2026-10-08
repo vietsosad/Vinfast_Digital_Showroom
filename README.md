@@ -101,16 +101,6 @@ ws://localhost:8000/api/v1/conversations/{conversation_id}/ws?token=<jwt>
 
 Quyền truy cập, payload và mã lỗi: [Đặc tả API](docs/API.md).
 
-## Tài khoản demo
-
-| Vai trò | Email | Mật khẩu |
-|---|---|---|
-| Admin | `admin@vinfast.vn` | `admin123` |
-| Nhân viên | `staff@vinfast.vn` | `staff123` |
-| Khách hàng | `customer@gmail.com` | `123456` |
-
-Chỉ dùng các tài khoản trên cho local/demo. Production phải thay `SECRET_KEY` và không sử dụng mật khẩu mẫu.
-
 ## Kiểm thử
 
 ```powershell
