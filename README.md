@@ -4,6 +4,36 @@ Backend cho showroom số VinFast, cung cấp API danh mục xe, báo giá, lị
 
 Đây là bản public của **Backend Pha 1**. Frontend, media sản phẩm, dữ liệu seed và database runtime chưa nằm trong repository này.
 
+## Đặc tả bài toán nghiệp vụ
+
+Showroom truyền thống thường xử lý việc hỏi xe, báo giá, đặt lịch và chăm sóc khách hàng qua nhiều kênh rời rạc. Thông tin dễ bị thất lạc, nhân viên khó theo dõi hàng đợi và khách hàng không có lịch sử xử lý thống nhất.
+
+Trong bài toán này, **số hóa** nghĩa là chuyển các thao tác đó thành quy trình có dữ liệu, trạng thái, phân quyền và lịch sử rõ ràng:
+
+| Cách làm thủ công | Quy trình trên hệ thống |
+|---|---|
+| Hỏi xe qua điện thoại/tin nhắn | Tra cứu danh mục xe qua API |
+| Ghi báo giá bằng bảng tính hoặc ghi chú | Tạo và theo dõi yêu cầu báo giá |
+| Đặt lịch bằng trao đổi riêng lẻ | Tạo lịch lái thử có trạng thái |
+| Nhân viên tự giữ lịch sử hội thoại | Chat được lưu và phát realtime |
+| Không rõ ai được xem dữ liệu nào | JWT, vai trò và quyền sở hữu tài nguyên |
+
+### Câu hỏi nghiệp vụ trung tâm
+
+Làm thế nào để chuyển sự quan tâm trực tuyến của khách hàng thành một quy trình bán hàng có thể theo dõi từ lúc xem xe, yêu cầu báo giá, đặt lịch lái thử đến khi được nhân viên tư vấn, mà mỗi người chỉ truy cập đúng dữ liệu thuộc quyền của mình?
+
+### Luồng nghiệp vụ chính
+
+```text
+Khách xem xe
+    → gửi yêu cầu báo giá hoặc đặt lịch lái thử
+    → nhân viên tiếp nhận trong hàng đợi CRM
+    → hai bên trao đổi qua chat
+    → cập nhật trạng thái và lưu lại lịch sử xử lý
+```
+
+Pha 1 chỉ chứng minh luồng backend, dữ liệu và phân quyền cho quy trình này; không bao gồm chatbot AI, frontend hoàn chỉnh hay hệ thống bán hàng production.
+
 ## Phạm vi nghiệp vụ
 
 - `customer`: xem xe, tính chi phí sở hữu, yêu cầu báo giá, đặt lịch lái thử và chat với nhân viên.
