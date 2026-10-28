@@ -71,7 +71,7 @@ Bảng báo cáo (sinh bởi `summarize_load_tests.py`):
 
 | Version | Runs | RPS median | p50 ms | p95 ms | p99 ms | Max ms | Error % | RPS spread % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Baseline | 3 | | | | | | | |
+| Baseline | 3 | 53.473 | 268.425 | 899.556 | 967.535 | 1247.838 | 0.0 | 1.3 |
 | Improved | 3 | | | | | | | |
 
 ## Nguyên tắc kết luận

@@ -21,7 +21,7 @@ Bảng này đối chiếu từng yêu cầu của đề bài với bằng chứ
 | Chung | Đặc tả API dạng `.json`/`.yaml` xem trước được | [openapi.json](openapi.json) hợp lệ OpenAPI 3.1; xem trước bằng `/docs`, `/redoc` hoặc ReDoc/Swagger Editor qua URL raw (link trong README) | ✅ |
 | Chung | Thuyết trình 5–7 phút: bài toán, nghiệp vụ, vấn đề dễ thấy, tổ chức mã nguồn, framework, yêu cầu kỹ thuật | [PHASE1_PRESENTATION.md](PHASE1_PRESENTATION.md) | ✅ |
 | Chung | Chỉ chức năng cơ bản, chưa tối ưu | Không cache/pagination/multi-worker; ghi rõ trong ARCHITECTURE | ✅ |
-| Chung | Kiểm thử tải trên Kaggle CPU | Notebook + script sẵn sàng; **chưa có số đo Kaggle** | ⏳ |
+| Chung | Kiểm thử tải trên Kaggle CPU | 3 × 120 s, concurrency 20: median 53.5 RPS, p95 900 ms, 0 % lỗi; raw evidence trong [loadtest/results/phase1-baseline/](../loadtest/results/phase1-baseline/README.md), tag `phase1-baseline-v1` | ✅ |
 
 ## Các lỗi đã sửa so với bản audit
 
@@ -62,4 +62,4 @@ Pha 1 chỉ được tuyên bố hoàn thành khi đồng thời có:
 - [x] Test không skip lỗi; mỗi test có database độc lập.
 - [x] README khớp với mã nguồn.
 - [x] CI xanh trên repository public hiện tại.
-- [ ] Ba lần đo Kaggle có raw evidence và tag `phase1-baseline-v1`.
+- [x] Ba lần đo Kaggle có raw evidence và tag `phase1-baseline-v1`.

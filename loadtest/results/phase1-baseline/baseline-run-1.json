@@ -1,0 +1,34 @@
+{
+  "started_at": "2026-10-28T16:08:37+00:00",
+  "base_url": "http://127.0.0.1:8000",
+  "paths": [
+    "/health",
+    "/api/v1/cars",
+    "/api/v1/motorbikes",
+    "/api/v1/locations"
+  ],
+  "duration_seconds": 120.248,
+  "concurrency": 20,
+  "requests": 6430,
+  "successful": 6430,
+  "failed": 0,
+  "error_rate_percent": 0.0,
+  "requests_per_second": 53.473,
+  "latency_ms": {
+    "mean": 373.521,
+    "p50": 268.425,
+    "p95": 899.556,
+    "p99": 963.788,
+    "max": 1184.704
+  },
+  "outcomes": {
+    "200": 6430
+  },
+  "server_resources": {
+    "cpu_percent_mean": 182.6,
+    "cpu_percent_max": 190.9,
+    "rss_mb_max": 106.9,
+    "samples": 120
+  },
+  "commit": "545e2293d61c201e73ca2016a0968f0481cabd6c"
+}
