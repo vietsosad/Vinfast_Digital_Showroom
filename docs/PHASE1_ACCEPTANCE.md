@@ -15,8 +15,8 @@ Bảng này đối chiếu từng yêu cầu của đề bài với bằng chứ
 | Bảo mật | Hỗ trợ đăng nhập | `POST /auth/login` (JWT); `tests/test_api/test_auth.py` | ✅ |
 | Bảo mật | ≥1 GET và ≥1 POST cần xác thực | `test_every_protected_get_and_post_rejects_missing_token` lặp qua **mọi** GET/POST có security | ✅ |
 | Bảo mật | Xác thực qua middleware/dependency, không lặp trong endpoint | `api/dependencies.py::get_current_user`, `require_roles`; `test_security_declarations_match_the_access_policy` | ✅ |
-| Triển khai | Đóng gói Docker | CI job `docker`: build → smoke → non-root → restart giữ dữ liệu → `healthy` | ✅ (đã chạy local; ⏳ CI xanh trên GitHub) |
-| Chung | GitHub công khai, commit cẩn thận | Repository `origin` đã ở chế độ Public; thay đổi đi qua Pull Request — xem mục “Việc nhóm cần làm” | ✅ Public; ⏳ CI xanh trên `main` |
+| Triển khai | Đóng gói Docker | CI job `docker`: build → smoke → non-root → restart giữ dữ liệu → `healthy` | ✅ CI job `docker` xanh trên `main` |
+| Chung | GitHub công khai, commit cẩn thận | Repository [vietsosad/Vinfast_Digital_Showroom](https://github.com/vietsosad/Vinfast_Digital_Showroom) ở chế độ Public; commit theo Conventional Commits; CI chạy trên mọi lần push | ✅ |
 | Chung | README mô tả kiến trúc và đặc tả | [README.md](../README.md), [API.md](API.md), [ARCHITECTURE.md](ARCHITECTURE.md) | ✅ |
 | Chung | Chỉ chức năng cơ bản, chưa tối ưu | Không cache/pagination/multi-worker; ghi rõ trong ARCHITECTURE | ✅ |
 | Chung | Kiểm thử tải trên Kaggle CPU | Notebook + script sẵn sàng; **chưa có số đo Kaggle** | ⏳ |
@@ -44,12 +44,8 @@ Bảng này đối chiếu từng yêu cầu của đề bài với bằng chứ
 
 ## Việc nhóm cần làm để đóng Pha 1
 
-1. **GitHub công khai đúng phiên bản**
-   - Repository `origin` đã ở chế độ *Public*; giữ nguyên chế độ này đến khi chấm xong.
-   - Push nhánh này, mở Pull Request vào `main`, để thành viên khác review rồi merge.
-   - Xác minh ẩn danh: `git ls-remote https://github.com/<owner>/<repo>.git` (từ máy chưa đăng nhập) phải liệt kê `main` đúng commit hash.
-   - Không push một snapshot khác tree; không viết lại lịch sử hay sửa tác giả commit cũ.
-2. **CI xanh** trên repository public (tab Actions) — chụp màn hình cả job `quality` và `docker`.
+1. ✅ **GitHub công khai đúng phiên bản** — repository Public; giữ nguyên chế độ này đến khi chấm xong. Không viết lại lịch sử hay sửa tác giả commit cũ.
+2. ✅ **CI xanh** trên `main` (tab Actions): job `Lint, tests, architecture, contract` và `Docker build and container smoke test`.
 3. **Kaggle baseline** theo [KAGGLE_LOAD_TEST.md](KAGGLE_LOAD_TEST.md): chạy notebook trên commit đã merge, commit `loadtest/results/phase1-baseline/`, gắn tag `phase1-baseline-v1`.
 4. **Ảnh minh chứng** lưu tại `docs/evidence/`: Swagger UI, CI xanh, `docker compose ps` trạng thái `healthy`, báo cáo pytest.
 
@@ -63,5 +59,5 @@ Pha 1 chỉ được tuyên bố hoàn thành khi đồng thời có:
 - [x] Swagger khớp runtime.
 - [x] Test không skip lỗi; mỗi test có database độc lập.
 - [x] README khớp với mã nguồn.
-- [ ] CI xanh trên repository public hiện tại.
+- [x] CI xanh trên repository public hiện tại.
 - [ ] Ba lần đo Kaggle có raw evidence và tag `phase1-baseline-v1`.
