@@ -1,6 +1,6 @@
 # Thuyết trình Pha 1 — VinFast Digital Showroom Backend
 
-Nội dung trình bày 5–7 phút: bài toán, nghiệp vụ, các vấn đề dễ thấy, tổ chức mã nguồn, framework và cách hệ thống đáp ứng yêu cầu kỹ thuật Pha 1. Mọi con số và tên test trong tài liệu này lấy từ mã nguồn trên nhánh `main`.
+Nội dung trình bày 5–7 phút: bài toán, nghiệp vụ, các vấn đề dễ thấy, tổ chức mã nguồn, framework và cách hệ thống đáp ứng yêu cầu kỹ thuật Pha 1. Mọi con số và tên test trong tài liệu này lấy từ mã nguồn và kết quả đo trên nhánh `main`.
 
 | # | Phần | Thời lượng |
 |---|---|---|
@@ -158,9 +158,21 @@ POST /api/v1/quotes {vehicle_id, request_note}
 | Xác thực qua cơ chế của framework | Dependency `get_current_user` + `require_roles` dùng chung | `test_security_declarations_match_the_access_policy` |
 | Đóng gói Docker | Non-root, healthcheck, dữ liệu còn sau restart | CI job `Docker build and container smoke test` |
 | GitHub công khai, README | Repository public, CI xanh trên `main`, README 1–4 trang | [README](../README.md) |
-| Kiểm thử tải Kaggle CPU | Notebook: warm-up 30 s, 3 lần × 120 s, concurrency 20, 1 worker | [KAGGLE_LOAD_TEST.md](KAGGLE_LOAD_TEST.md), kết quả tại `loadtest/results/phase1-baseline/` |
+| Kiểm thử tải Kaggle CPU | Warm-up 30 s, 3 lần × 120 s, concurrency 20, 1 worker: median **53.5 RPS**, p95 **900 ms**, **0 %** lỗi | [Kết quả](../loadtest/results/phase1-baseline/README.md), [notebook Kaggle](https://www.kaggle.com/code/hoangviethehe/phase-1-baseline-kaggle-cpu-load-test?scriptVersionId=363226232), [quy trình](KAGGLE_LOAD_TEST.md) |
 
 Trạng thái chi tiết: [PHASE1_ACCEPTANCE.md](PHASE1_ACCEPTANCE.md).
+
+### Kết quả kiểm thử tải trên Kaggle CPU
+
+Đo tại commit `545e229`, chạy Batch trên Kaggle (Intel Xeon 2.20 GHz, 4 vCPU), SQLite, 1 Uvicorn worker, concurrency 20, 3 lần × 120 s sau 30 s warm-up:
+
+| RPS (median) | p50 | p95 | p99 | Max | Lỗi | Dao động RPS |
+|---:|---:|---:|---:|---:|---:|---:|
+| 53.5 | 268 ms | 900 ms | 968 ms | 1248 ms | 0 / 19 350 | 1.3 % |
+
+- Ba lần đo chỉ lệch nhau 1.3 % và không có request lỗi, nên đây là mốc tin cậy để so trước/sau ở Pha 2.
+- p95 gấp ~3.4 lần p50: một phần nhỏ request chậm hẳn. Pha 2 đo riêng từng endpoint rồi tối ưu catalog, mục tiêu giảm p95 ít nhất 30 % ([PHASE_PLAN.md](PHASE_PLAN.md)).
+- Bằng chứng: [số liệu thô và giải thích](../loadtest/results/phase1-baseline/README.md), [notebook Kaggle](https://www.kaggle.com/code/hoangviethehe/phase-1-baseline-kaggle-cpu-load-test?scriptVersionId=363226232), tag [`phase1-baseline-v1`](https://github.com/vietsosad/Vinfast_Digital_Showroom/tree/phase1-baseline-v1).
 
 ## 6. Kịch bản demo (≤1 phút)
 
@@ -177,3 +189,4 @@ Trạng thái chi tiết: [PHASE1_ACCEPTANCE.md](PHASE1_ACCEPTANCE.md).
 - **Làm sao chứng minh tầng nghiệp vụ không phụ thuộc framework?** `tests/test_architecture.py` phân tích AST từng file trong `domain/` và `application/`; chỉ cần một import FastAPI/SQLAlchemy là CI đỏ.
 - **Tải ảnh dùng multipart có vi phạm yêu cầu JSON không?** Ba endpoint upload nhận dữ liệu nhị phân là ngoại lệ duy nhất, được ghi trong tài liệu và khóa bằng contract test; mọi dữ liệu nghiệp vụ khác đều là JSON.
 - **Vì sao dùng SQLite?** Để setup nhanh và có baseline ổn định trên Kaggle CPU. PostgreSQL được hỗ trợ qua `DATABASE_URL` mà không đổi code nghiệp vụ.
+- **Vì sao chỉ ~53 RPS?** Pha 1 cố ý chưa tối ưu: 1 worker, SQLite, catalog trả toàn bộ danh sách, mỗi request mở kết nối mới, client và server chạy chung một máy 4 vCPU. Với 20 client gửi liên tục, RPS ≈ 20 / latency trung bình (0.374 s) ≈ 53.5, nên muốn tăng RPS phải giảm thời gian xử lý mỗi request. Con số này là mốc để so sánh, không phải năng lực production.

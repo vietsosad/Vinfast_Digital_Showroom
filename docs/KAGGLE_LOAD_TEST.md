@@ -74,6 +74,8 @@ Bảng báo cáo (sinh bởi `summarize_load_tests.py`):
 | Baseline | 3 | 53.473 | 268.425 | 899.556 | 967.535 | 1247.838 | 0.0 | 1.3 |
 | Improved | 3 | | | | | | | |
 
+Baseline đo ngày 2026-10-28 tại commit `545e229` ([Kaggle version 363226232](https://www.kaggle.com/code/hoangviethehe/phase-1-baseline-kaggle-cpu-load-test?scriptVersionId=363226232)); số liệu thô và cách đọc: [loadtest/results/phase1-baseline/](../loadtest/results/phase1-baseline/README.md).
+
 ## Nguyên tắc kết luận
 
 - Không so hai cấu hình phần cứng/database khác nhau; đối chiếu `metadata.json` của hai phiên bản.

@@ -51,7 +51,7 @@ Mô tả chi tiết bài toán, các vấn đề dễ thấy và cách xử lý:
 | Đăng nhập; ≥1 GET và ≥1 POST cần xác thực | `POST /api/v1/auth/login` trả JWT; 9 GET và 14 POST yêu cầu token | contract test gọi **mọi** GET/POST được bảo vệ, kỳ vọng 401 |
 | Xác thực qua cơ chế của framework | Dependency dùng chung `get_current_user` + `require_roles` ([api/dependencies.py](backend/src/api/dependencies.py)); không endpoint nào tự đọc token | `test_security_declarations_match_the_access_policy` |
 | Đóng gói Docker | Multi-stage, user không phải root, healthcheck trả 503 khi DB lỗi | CI: build → smoke → restart giữ dữ liệu → `healthy` |
-| Kiểm thử tải trên Kaggle CPU | Notebook + script đo + script tổng hợp median | [loadtest/](loadtest/README.md), [docs/KAGGLE_LOAD_TEST.md](docs/KAGGLE_LOAD_TEST.md) |
+| Kiểm thử tải trên Kaggle CPU | Đã đo tại commit `545e229`: median **53.5 RPS**, p95 **900 ms**, **0 %** lỗi trên 19 350 request | [Kết quả](loadtest/results/phase1-baseline/README.md), [notebook Kaggle](https://www.kaggle.com/code/hoangviethehe/phase-1-baseline-kaggle-cpu-load-test?scriptVersionId=363226232), [quy trình](docs/KAGGLE_LOAD_TEST.md) |
 
 Trạng thái nghiệm thu từng mục: [docs/PHASE1_ACCEPTANCE.md](docs/PHASE1_ACCEPTANCE.md).
 
@@ -154,7 +154,15 @@ Set-Location backend; ruff check src tests scripts; pytest -q
 
 - 120 test, mỗi test dùng database riêng: unit test nghiệp vụ với fake in-memory và integration test cho mọi nhóm endpoint, WebSocket, migration, transaction, kiến trúc, hợp đồng OpenAPI.
 - [GitHub Actions](.github/workflows/ci.yml): Ruff → pytest → kiến trúc → OpenAPI contract → Docker build → smoke test container (non-root, dữ liệu còn sau restart, `healthy`).
-- [Kaggle CPU](docs/KAGGLE_LOAD_TEST.md): notebook clone đúng commit, warm-up 30 giây rồi chạy 3 lần × 120 giây ở concurrency 20 với một Uvicorn worker; kết quả lưu tại `loadtest/results/phase1-baseline/`.
+- [Kaggle CPU](docs/KAGGLE_LOAD_TEST.md): [notebook](https://www.kaggle.com/code/hoangviethehe/phase-1-baseline-kaggle-cpu-load-test?scriptVersionId=363226232) clone đúng commit, warm-up 30 giây rồi chạy 3 lần × 120 giây ở concurrency 20 với một Uvicorn worker.
+
+Baseline Pha 1 đo trên Kaggle CPU ngày 2026-10-28 tại commit `545e229` (tag [`phase1-baseline-v1`](https://github.com/vietsosad/Vinfast_Digital_Showroom/tree/phase1-baseline-v1)):
+
+| RPS (median) | p50 | p95 | p99 | Lỗi | Dao động RPS giữa 3 lần |
+|---:|---:|---:|---:|---:|---:|
+| 53.5 | 268 ms | 900 ms | 968 ms | 0 / 19 350 request | 1.3 % |
+
+Số liệu thô, metadata, access log và cách đọc kết quả: [loadtest/results/phase1-baseline/](loadtest/results/phase1-baseline/README.md).
 
 ## 10. Giới hạn có chủ đích của Pha 1
 
@@ -164,7 +172,7 @@ Pha 1 ưu tiên tính đúng và khả năng kiểm thử, **chưa tối ưu** �
 
 - [Thuyết trình Pha 1](docs/PHASE1_PRESENTATION.md) — bài toán, nghiệp vụ, vấn đề dễ thấy, tổ chức mã nguồn, yêu cầu kỹ thuật
 - [Đặc tả API](docs/API.md) · [OpenAPI](docs/openapi.json) · [Kiến trúc](docs/ARCHITECTURE.md) · [Nghiệm thu Pha 1](docs/PHASE1_ACCEPTANCE.md)
-- [Load test Kaggle](docs/KAGGLE_LOAD_TEST.md) · [Phân công](docs/PHASE1_BACKEND_ASSIGNMENT.md) · [Kế hoạch](docs/PHASE_PLAN.md)
+- [Load test Kaggle](docs/KAGGLE_LOAD_TEST.md) · [Kết quả baseline](loadtest/results/phase1-baseline/README.md) · [Phân công](docs/PHASE1_BACKEND_ASSIGNMENT.md) · [Kế hoạch](docs/PHASE_PLAN.md)
 
 ## 12. Nhóm phát triển
 
