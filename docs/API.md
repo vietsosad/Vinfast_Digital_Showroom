@@ -1,21 +1,21 @@
 # Đặc tả API
 
-Base URL chuẩn: `/api/v1`. Dữ liệu HTTP dùng JSON, ngoại trừ API quản trị catalog nhận `multipart/form-data` để hỗ trợ tải ảnh. Swagger UI được sinh tự động tại `/docs`.
+Base URL chuẩn: `/api/v1`. Mọi request và response dùng **JSON**, trừ ba endpoint tải ảnh nhận `multipart/form-data` (đánh dấu 📎 bên dưới). Swagger UI tại `/docs`; đặc tả máy đọc được tại `/openapi.json` và bản snapshot [openapi.json](openapi.json) (được test so khớp với runtime). Schema chi tiết của từng request/response luôn lấy từ OpenAPI.
 
 ## Xác thực
 
-Đăng nhập trả về JWT Bearer token:
+`POST /api/v1/auth/login` trả JWT; gửi kèm mọi request được bảo vệ:
 
 ```http
 Authorization: Bearer <access_token>
 ```
 
-Middleware/dependency dùng chung đọc token, kiểm tra tài khoản còn hoạt động và áp dụng role. Client không được gửi `user_id`, tên hoặc số điện thoại để giả danh chủ thể; backend lấy danh tính từ token cho báo giá, lịch lái thử và hội thoại.
+OpenAPI khai báo security scheme `HTTPBearer`. Một dependency dùng chung (`get_current_user`) đọc token, kiểm tra tài khoản còn hoạt động; `require_roles` áp dụng role. Không endpoint nào tự đọc token. Client không thể gửi `user_id`, tên, số điện thoại hay giá để giả danh/tác động: backend lấy danh tính từ token và tên/giá xe từ catalog.
 
-Role trong backend:
+Role:
 
 - `customer`: khách hàng.
-- `consultant`: nhân viên tư vấn; UI có thể hiển thị nhãn `staff`.
+- `consultant`: nhân viên tư vấn (UI có thể hiển thị là `staff`).
 - `admin`: quản trị viên.
 
 ## Endpoint
@@ -24,86 +24,156 @@ Ký hiệu quyền: `Public`, `C` customer, `S` consultant, `A` admin, `Auth` m�
 
 | Method | Path | Quyền | Mục đích |
 |---|---|---:|---|
-| GET | `/health` | Public | Kiểm tra API và database |
-| POST | `/api/v1/auth/register` | Public | Đăng ký customer |
+| GET | `/health` | Public | Trạng thái API và database (503 khi DB lỗi) |
+| POST | `/api/v1/auth/register` | Public | Đăng ký customer (email, số điện thoại là duy nhất) |
 | POST | `/api/v1/auth/login` | Public | Nhận JWT |
-| GET | `/api/v1/auth/me` | Auth | Lấy tài khoản hiện tại |
-| PUT | `/api/v1/auth/me` | Auth | Sửa hồ sơ cá nhân |
+| GET | `/api/v1/auth/me` | Auth | Tài khoản hiện tại |
+| PUT | `/api/v1/auth/me` | Auth | Sửa họ tên, số điện thoại (bắt buộc, duy nhất), mật khẩu (bỏ trống = giữ nguyên) |
 | GET | `/api/v1/auth/users` | A | Danh sách tài khoản |
-| POST | `/api/v1/auth/create-staff` | A | Tạo consultant/admin |
-| PUT | `/api/v1/auth/users/{id}` | Chủ tài khoản/A | Sửa tài khoản |
-| DELETE | `/api/v1/auth/users/{id}` | A | Xóa tài khoản |
-| GET | `/api/v1/cars` | Public | Danh sách ô tô |
-| GET | `/api/v1/cars/{id-or-code}` | Public | Chi tiết ô tô |
-| POST | `/api/v1/cars` | S/A | Tạo ô tô |
-| PUT | `/api/v1/cars/{id}` | S/A | Cập nhật ô tô |
+| POST | `/api/v1/auth/create-staff` | A | Tạo `consultant` hoặc `admin` |
+| PUT | `/api/v1/auth/users/{id}` | Chủ tài khoản/A | Sửa tài khoản; chỉ A đổi `role`/`is_active` |
+| DELETE | `/api/v1/auth/users/{id}` | A | Xóa tài khoản (không tự xóa) |
+| GET | `/api/v1/cars` | Public | Danh sách ô tô, lọc `?category=` |
+| GET | `/api/v1/cars/{id-or-code}` | Public | Chi tiết ô tô theo UUID hoặc mã dòng xe |
+| POST | `/api/v1/cars` | S/A | Tạo ô tô (JSON) |
+| PUT | `/api/v1/cars/{id}` | S/A | Cập nhật một phần (JSON) |
+| POST 📎 | `/api/v1/cars/{id}/image` | S/A | Tải ảnh đại diện (field `image`) |
 | DELETE | `/api/v1/cars/{id}` | A | Xóa ô tô |
 | GET | `/api/v1/motorbikes` | Public | Danh sách xe máy điện |
 | GET | `/api/v1/motorbikes/{id-or-code}` | Public | Chi tiết xe máy điện |
-| POST | `/api/v1/motorbikes` | S/A | Tạo xe máy điện |
-| PUT | `/api/v1/motorbikes/{id}` | S/A | Cập nhật xe máy điện |
+| POST | `/api/v1/motorbikes` | S/A | Tạo xe máy điện (JSON) |
+| PUT | `/api/v1/motorbikes/{id}` | S/A | Cập nhật một phần (JSON) |
+| POST 📎 | `/api/v1/motorbikes/{id}/image` | S/A | Tải ảnh đại diện (field `image`) |
 | DELETE | `/api/v1/motorbikes/{id}` | A | Xóa xe máy điện |
-| GET | `/api/v1/catalog-media/{vehicle-type}/{vehicle-id}` | Public | Danh sách media của xe |
-| POST | `/api/v1/catalog-media/{vehicle-type}/{vehicle-id}/links` | S/A | Thêm tối đa 100 URL media |
-| POST | `/api/v1/catalog-media/{vehicle-type}/{vehicle-id}/upload` | S/A | Tải tối đa 20 ảnh, mỗi ảnh tối đa 8 MB |
+| GET | `/api/v1/catalog-media/{vehicle-type}/{vehicle-id}` | Public | Thư viện ảnh của xe |
+| POST | `/api/v1/catalog-media/{vehicle-type}/{vehicle-id}/links` | S/A | Thêm tối đa 100 URL ảnh (JSON) |
+| POST 📎 | `/api/v1/catalog-media/{vehicle-type}/{vehicle-id}/upload` | S/A | Tải tối đa 20 ảnh (field `files`) |
 | PUT | `/api/v1/catalog-media/{media-id}` | S/A | Cập nhật metadata hoặc ảnh chính |
-| DELETE | `/api/v1/catalog-media/{media-id}` | S/A | Xóa media |
-| GET | `/api/v1/locations` | Public | Showroom/trạm sạc |
-| POST | `/api/v1/locations/sync` | A | Nạp lại dataset địa điểm |
-| POST | `/api/v1/tco/calculate` | Public | Tính chi phí sở hữu theo tham số |
-| GET | `/api/v1/quotes` | Auth | C xem của mình; S/A xem hàng đợi |
-| POST | `/api/v1/quotes` | Auth | Tạo yêu cầu báo giá cho chính mình |
-| PUT | `/api/v1/quotes/{id}` | S/A | Cập nhật trạng thái/giá cuối |
-| GET | `/api/v1/bookings` | Auth | C xem của mình; S/A xem hàng đợi |
+| DELETE | `/api/v1/catalog-media/{media-id}` | S/A | Xóa ảnh |
+| GET | `/api/v1/locations` | Public | Showroom/trạm sạc, lọc `demand_type`, `province`, `search` |
+| POST | `/api/v1/locations/sync` | A | Nạp lại dataset địa điểm (idempotent) |
+| POST | `/api/v1/tco/calculate` | Public | Ước tính chi phí lăn bánh và vận hành |
+| GET | `/api/v1/quotes` | Auth | C: luôn chỉ của mình; S/A: lọc `user_id`, `email`, `phone`, `status` |
+| POST | `/api/v1/quotes` | Auth | Yêu cầu báo giá cho chính mình |
+| PUT | `/api/v1/quotes/{id}` | S/A | Đổi trạng thái, ghi chú, chiết khấu |
+| GET | `/api/v1/bookings` | Auth | C: luôn chỉ của mình; S/A: lọc `phone`, `status` |
 | POST | `/api/v1/bookings` | Auth | Đặt lịch lái thử cho chính mình |
-| PUT | `/api/v1/bookings/{id}` | S/A | Cập nhật trạng thái lịch |
-| GET | `/api/v1/customer-profiles/me` | Auth | Xem hồ sơ CRM của mình |
+| PUT | `/api/v1/bookings/{id}` | S/A | Đổi trạng thái lịch |
+| GET | `/api/v1/customer-profiles/me` | Auth | Hồ sơ CRM của mình |
 | GET | `/api/v1/customer-profiles` | S/A | Tra cứu hồ sơ CRM |
 | GET | `/api/v1/customer-profiles/{id}` | S/A | Chi tiết hồ sơ CRM |
 | PUT | `/api/v1/customer-profiles/{id}` | S/A | Cập nhật lead/ghi chú thủ công |
 | POST | `/api/v1/conversations` | C | Mở hội thoại hỗ trợ |
-| GET | `/api/v1/conversations` | Auth | C xem của mình; S/A xem hàng đợi |
+| GET | `/api/v1/conversations` | Auth | C: của mình; S/A: hàng đợi |
 | GET | `/api/v1/conversations/{id}/messages` | Thành viên/S/A | Lịch sử tin nhắn |
 | POST | `/api/v1/conversations/{id}/messages` | Thành viên/S/A | Gửi và phát tin nhắn |
 | POST | `/api/v1/conversations/{id}/assign` | S/A | Nhận xử lý hội thoại |
 | POST | `/api/v1/conversations/{id}/close` | Thành viên/S/A | Đóng hội thoại |
 | DELETE | `/api/v1/conversations/{id}` | Chủ sở hữu/A | Xóa hội thoại và tin nhắn |
 
-## Luồng hội thoại
+`/api/...` (không có `v1`) là alias ẩn khỏi OpenAPI cho client web cũ.
 
-Tạo hội thoại:
+## Ví dụ
+
+Đặt lịch lái thử — chỉ cần xe, ngày, giờ, ghi chú:
+
+```http
+POST /api/v1/bookings
+Authorization: Bearer <customer-token>
+Content-Type: application/json
+
+{"vehicle_id": "9c5c27b7-0f05-49eb-b90b-49c10c0577fe", "preferred_date": "2026-10-22", "preferred_time": "09:30", "notes": "Showroom Long Biên"}
+```
+
+```json
+{
+  "id": "0df6a8a1-dba9-4d34-b829-9f85bda48e7f",
+  "user_id": "e79a958d-08b1-415f-96f7-e8433911e93b",
+  "customer_name": "Khách hàng Demo",
+  "customer_phone": "0900000003",
+  "vehicle_id": "9c5c27b7-0f05-49eb-b90b-49c10c0577fe",
+  "vehicle_name": "VinFast VF 2 Tiêu chuẩn",
+  "preferred_date": "2026-10-22",
+  "preferred_time": "09:30",
+  "status": "pending",
+  "notes": "Showroom Long Biên",
+  "created_at": "2026-10-15T16:14:40"
+}
+```
+
+Quy tắc: ngày (theo giờ Việt Nam, UTC+7) không ở quá khứ và không quá 180 ngày; giờ dạng `HH:MM`; xe phải tồn tại và đang kinh doanh.
+
+Yêu cầu báo giá — giá và tên xe do backend lấy từ catalog:
+
+```http
+POST /api/v1/quotes
+Content-Type: application/json
+
+{"vehicle_id": "9c5c27b7-0f05-49eb-b90b-49c10c0577fe", "request_note": "Muốn nhận giá lăn bánh tại Hà Nội"}
+```
+
+Nhân viên duyệt và áp chiết khấu. `base_price` luôn là giá catalog. Nếu không gửi `final_price` thì `final_price = base_price − discount` (`0 ≤ discount ≤ base_price`); nếu gửi `final_price` (giá lăn bánh đã gồm phí, ≥ 0) thì backend lưu đúng giá nhân viên chốt:
+
+```http
+PUT /api/v1/quotes/{id}
+Content-Type: application/json
+
+{"status": "approved", "discount": 10000000, "notes": "Ưu đãi tháng 10"}
+```
+
+Tạo ô tô (JSON) rồi tải ảnh:
+
+```http
+POST /api/v1/cars
+Content-Type: application/json
+
+{"model_name": "VinFast VF 6 Plus", "version": "Plus", "list_price": 765000000, "range_km": 460, "additional_specs": {"colors": ["Trắng", "Đen"]}}
+```
+
+```http
+POST /api/v1/cars/{id}/image
+Content-Type: multipart/form-data; boundary=...
+
+image=<file .jpg|.jpeg|.png|.webp|.avif, tối đa 8 MB>
+```
+
+Ảnh bị từ chối nếu phần mở rộng, MIME khai báo và chữ ký tệp (magic bytes) không khớp nhau.
+
+## Trạng thái nghiệp vụ
+
+| Đối tượng | Giá trị | Chuyển hợp lệ |
+|---|---|---|
+| Quote | `pending`, `contacted`, `approved`, `completed`, `rejected`, `cancelled` | `pending → contacted/approved/rejected/cancelled`; `contacted → approved/rejected/cancelled`; `approved → completed/cancelled` |
+| Booking | `pending`, `confirmed`, `completed`, `cancelled` | `pending → confirmed/cancelled`; `confirmed → completed/cancelled` |
+| Lead score | `HOT`, `WARM`, `COLD` | tự do (nhân viên) |
+| Lead status | `NEW`, `CONTACTED`, `TEST_DRIVEN`, `QUOTED`, `WON`, `LOST` | tự do (nhân viên); hệ thống tự cập nhật khi có quote/booking |
+
+Gửi lại đúng trạng thái hiện tại được chấp nhận (để chỉ sửa ghi chú/chiết khấu).
+
+## Luồng hội thoại
 
 ```http
 POST /api/v1/conversations
 Authorization: Bearer <customer-token>
 Content-Type: application/json
 
-{"subject":"Đặt lịch lái thử VF 6"}
+{"subject": "Đặt lịch lái thử VF 6"}
 ```
-
-Gửi tin qua REST:
 
 ```http
 POST /api/v1/conversations/{conversation_id}/messages
-Authorization: Bearer <token>
 Content-Type: application/json
 
-{"content":"Tôi muốn lái thử vào sáng thứ Bảy."}
+{"content": "Tôi muốn lái thử vào sáng thứ Bảy."}
 ```
 
-Mở realtime channel:
+Realtime channel:
 
 ```text
 ws://localhost:8000/api/v1/conversations/{conversation_id}/ws?token=<jwt>
 ```
 
-Client gửi:
-
-```json
-{"content":"Nội dung tin nhắn"}
-```
-
-Server phát:
+Client gửi `{"content": "..."}`; server phát:
 
 ```json
 {
@@ -120,26 +190,24 @@ Server phát:
 }
 ```
 
-Các event khác: `conversation_updated`, `conversation_deleted`, `error`. REST vẫn là đường gửi dự phòng nếu WebSocket mất kết nối.
+Các event khác: `conversation_updated`, `conversation_deleted`, `error`. Quy tắc:
 
-## Quy tắc nghiệp vụ chat
+- Chỉ customer mở hội thoại; subject 3–160 ký tự. Customer chỉ đọc hội thoại của mình.
+- Consultant phải nhận hội thoại trước khi trả lời và không giành hội thoại người khác đã nhận; admin có thể.
+- Tin nhắn không rỗng, tối đa 2.000 ký tự, chỉ gửi khi `open`.
+- WebSocket xác thực JWT trước khi `accept`: đóng `4401` khi token/tài khoản không hợp lệ, `4403` khi không có quyền với hội thoại.
 
-- Chỉ customer được mở hội thoại; subject dài 3–160 ký tự.
-- Customer chỉ đọc hội thoại do mình sở hữu.
-- Consultant/admin xem hàng đợi; consultant phải nhận hội thoại trước khi trả lời và không thể giành hội thoại đã được người khác nhận.
-- Tin nhắn không rỗng, tối đa 2.000 ký tự, chỉ gửi khi trạng thái `open`.
-- Customer chủ sở hữu và admin được xóa. Xóa hội thoại xóa toàn bộ message liên quan.
-- WebSocket xác thực JWT trước khi `accept`; mã đóng `4401` cho token/tài khoản không hợp lệ và `4403` khi không có quyền.
+## Mã lỗi
 
-## Mã lỗi chung
+Mọi lỗi có dạng `{"detail": "..."}` (lỗi validation của FastAPI trả `detail` là danh sách).
 
 | HTTP | Ý nghĩa |
 |---:|---|
-| 400 | Dữ liệu xung đột hoặc thao tác không hợp lệ |
-| 401 | Thiếu, sai hoặc hết hạn token |
-| 403 | Đã đăng nhập nhưng không có quyền |
+| 401 | Thiếu, sai, hết hạn token hoặc tài khoản bị khóa (kèm `WWW-Authenticate: Bearer`) |
+| 403 | Đã đăng nhập nhưng không đủ quyền; hoặc đăng nhập vào tài khoản bị khóa |
 | 404 | Không tìm thấy tài nguyên |
-| 422 | Payload không đạt validation/quy tắc nghiệp vụ |
-| 500 | Lỗi không dự kiến; không trả stack trace cho client |
-
-Schema chi tiết, ví dụ request và response luôn lấy từ `/openapi.json` để tránh tài liệu lệch mã nguồn.
+| 409 | Xung đột: email/số điện thoại đã tồn tại, chuyển trạng thái không hợp lệ, admin tự hạ quyền/tự xóa |
+| 413 | Tệp tải lên vượt giới hạn |
+| 422 | Payload sai schema hoặc vi phạm quy tắc nghiệp vụ (ngày quá khứ, chiết khấu vượt giá, ảnh giả…) |
+| 500 | Lỗi không dự kiến; trả thông báo chung, không lộ stack trace |
+| 503 | `/health`: database không truy cập được |

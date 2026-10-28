@@ -2,7 +2,7 @@
 
 Backend cho showroom số VinFast, cung cấp API danh mục xe, báo giá, lịch lái thử, CRM và chat trực tiếp giữa khách hàng với nhân viên.
 
-Đây là bản public của **Backend Pha 1**. Frontend, media sản phẩm, dữ liệu seed và database runtime chưa nằm trong repository này.
+Đây là bản public của **Backend Pha 1**. Frontend, ảnh sản phẩm và database runtime không nằm trong repository này; dữ liệu catalog tham chiếu nằm trong `data/catalog/` và được nạp tự động khi database rỗng.
 
 ## Đặc tả bài toán nghiệp vụ
 
@@ -44,38 +44,69 @@ Pha 1 chỉ chứng minh luồng backend, dữ liệu và phân quyền cho quy 
 
 Hệ thống không dùng chatbot, mô hình ngôn ngữ, vector database hoặc API key của dịch vụ AI.
 
+## Đáp ứng yêu cầu Pha 1
+
+| Yêu cầu Pha 1 | Cách đáp ứng | Bằng chứng |
+|---|---|---|
+| REST + JSON, có GET/POST/DELETE | 46 operation (16 GET, 17 POST, 8 PUT, 5 DELETE); mọi request/response JSON, trừ 3 endpoint tải ảnh `multipart/form-data` | [docs/openapi.json](docs/openapi.json), `tests/test_openapi_contract.py` |
+| Tài liệu OpenAPI/Swagger | `/docs`, `/openapi.json`; snapshot commit trong repo và được test so khớp runtime | `tests/test_openapi_snapshot.py` |
+| API → Nghiệp vụ → Truy cập dữ liệu | 4 package `api/`, `application/`, `domain/`, `infrastructure/`; tầng nghiệp vụ không import FastAPI/SQLAlchemy/Pydantic | `tests/test_architecture.py` (quét toàn bộ backend) |
+| Repository/DAL dùng ORM | 9 repository SQLAlchemy sau các protocol ở `domain/`; Unit of Work giữ 1 transaction/use case | `backend/src/infrastructure/repositories/` |
+| Đăng nhập, GET/POST cần xác thực | JWT Bearer; mọi GET/POST được bảo vệ trả 401 khi thiếu/sai token | contract test lặp qua **tất cả** operation có security |
+| Xác thực qua middleware/dependency | `get_current_user` + `require_roles` dùng chung tại `api/dependencies.py` | không endpoint nào tự đọc token |
+| Docker | Multi-stage, non-root (uid 10001), healthcheck trả 503 khi DB lỗi, seed dữ liệu khi DB rỗng | CI job `docker`: build → smoke → restart → healthy |
+| Kiểm thử tải Kaggle CPU | Notebook + script đo + script tổng hợp median | [loadtest/](loadtest/README.md), [docs/KAGGLE_LOAD_TEST.md](docs/KAGGLE_LOAD_TEST.md) |
+
+Chi tiết từng tiêu chí và trạng thái nghiệm thu: [docs/PHASE1_ACCEPTANCE.md](docs/PHASE1_ACCEPTANCE.md).
+
 ## Kiến trúc
 
 ```text
-HTTP/JSON + WebSocket
-          │
-          ▼
-API layer                 backend/src/api/
-          │
-          ▼
-Business services         backend/src/services/
-          │
-          ▼
-Repository adapters       backend/src/repositories/
-          │
-          ▼
-SQLAlchemy → SQLite / PostgreSQL
+HTTP / WebSocket client
+        │  JSON
+        ▼
+api/              FastAPI router, Pydantic schema, status code, auth dependency, map lỗi → HTTP
+        │  gọi use case
+        ▼
+application/      Use case: điều phối repository, phân quyền nghiệp vụ, commit đúng 1 lần
+        │
+        ▼
+domain/           Entity, enum trạng thái + bảng chuyển trạng thái, lỗi nghiệp vụ, Repository/UnitOfWork protocol
+        ▲  implements
+        │
+infrastructure/   SQLAlchemy ORM + repository, Unit of Work, JWT, PBKDF2, lưu file, migration, seed
+        │
+        ▼
+SQLite (local, Docker) hoặc PostgreSQL (asyncpg)
 ```
 
-API layer chỉ tiếp nhận request và validation. Nghiệp vụ nằm trong service; repository cô lập truy cập dữ liệu. Danh tính người dùng lấy từ JWT thay vì tin `user_id` do client gửi.
+Quy tắc phụ thuộc (được kiểm tra tự động):
+
+- `domain/` và `application/` là Python thuần: không import `fastapi`, `starlette`, `pydantic`, `sqlalchemy`, driver DB, `jwt`, `passlib`, và không import `api/` hay `infrastructure/`.
+- `api/` không import SQLAlchemy. Chỉ `api/dependencies.py` (composition root) được import `infrastructure/` để gắn repository vào use case.
+- `infrastructure/` không import tầng web.
+
+Danh tính người dùng lấy từ JWT thay vì tin `user_id` do client gửi. Một use case = một transaction: ví dụ tạo báo giá ghi `quotes` và cập nhật `customer_profiles` rồi mới commit; nếu bước CRM lỗi thì báo giá cũng rollback (`tests/test_transactions.py`).
 
 Chi tiết: [Kiến trúc và thuộc tính chất lượng](docs/ARCHITECTURE.md).
 
 ## Cấu trúc chính
 
 ```text
-api/                       entrypoint API
-backend/src/               mã nguồn backend
-backend/tests/             unit/integration tests
-backend/Dockerfile         production image
-docs/                      tài liệu API và kiến trúc
-docker-compose.yml         cấu hình Docker
-render.yaml                cấu hình Render
+api/index.py                     adapter ASGI import backend/src/main.py
+backend/src/api/                 Router HTTP/WebSocket, schema Pydantic, dependencies (composition root), map lỗi
+backend/src/application/         Use case (auth, catalog, quote, booking, CRM, location, chat, media, TCO, upload)
+backend/src/domain/              Entity, enum trạng thái, quy tắc, lỗi, repository & unit-of-work protocol
+backend/src/infrastructure/      ORM, repository SQLAlchemy, unit of work, JWT/PBKDF2, file storage, migration, seed
+backend/src/main.py              Tạo FastAPI app, middleware CORS, mount /static, lifespan
+backend/tests/                   unit/, test_api/, kiến trúc, contract, migration, transaction
+backend/scripts/                 smoke test, load test + tổng hợp, export OpenAPI/catalog, công cụ seed
+backend/Dockerfile               Image backend Pha 1
+data/catalog/vehicles.json       Dữ liệu catalog tham chiếu, nạp khi bảng rỗng
+loadtest/                        Notebook Kaggle và kết quả đo
+docs/                            Tài liệu API, kiến trúc và nghiệm thu
+docker-compose.yml               Cấu hình Docker
+render.yaml                      cấu hình Render
 ```
 
 ## Chạy cục bộ
@@ -86,7 +117,7 @@ Yêu cầu Python 3.10 trở lên. Chạy từ thư mục gốc bằng PowerShel
 Copy-Item .env.example .env
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r backend/requirements.txt
+pip install -r backend/requirements-dev.txt -c backend/constraints.txt
 Set-Location backend
 uvicorn src.main:app --reload --port 8000
 ```
@@ -95,7 +126,9 @@ uvicorn src.main:app --reload --port 8000
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 - Health check: `http://localhost:8000/health`
 
-Schema database được tạo tự động. Vì dữ liệu seed chưa public, danh mục ban đầu có thể trống.
+Khi khởi động, ứng dụng tự tạo bảng còn thiếu, chạy migration idempotent và nạp catalog từ `data/catalog/vehicles.json` cùng mạng lưới địa điểm **nếu bảng đang rỗng**. Ngoài môi trường production, ứng dụng tạo thêm tài khoản demo cho từng vai trò.
+
+Cấu hình qua biến môi trường (xem [.env.example](.env.example)): `DATABASE_URL`, `SECRET_KEY`, `CORS_ORIGINS`, `STATIC_DIR`, `SEED_DATA_DIR`, `SEED_REFERENCE_DATA`, `SEED_DEMO_ACCOUNTS`, `MAX_UPLOAD_BYTES`. Với `APP_ENV=production`, ứng dụng từ chối khởi động nếu `SECRET_KEY` yếu (< 32 ký tự hoặc giá trị mẫu) hoặc `CORS_ORIGINS` chứa `*`.
 
 ## Chạy bằng Docker
 
@@ -104,7 +137,16 @@ Copy-Item .env.example .env
 docker compose up --build
 ```
 
-API chạy tại `http://localhost:8000`; SQLite runtime được lưu trong `./data` và không được commit.
+- API chạy tại `http://localhost:8000` (đổi cổng host bằng biến `HOST_PORT`).
+- Image chỉ chứa `backend/src`, dữ liệu `data/catalog` và `static/`; container chạy bằng user không phải root (uid 10001).
+- SQLite runtime nằm trong named volume `showroom-data`, giữ nguyên sau `docker compose restart` và không được commit.
+- Healthcheck gọi `/health`; endpoint trả **503** khi không truy cập được database nên container không báo khỏe giả.
+
+Kiểm tra nhanh container đang chạy:
+
+```powershell
+python backend/scripts/smoke_test.py --base-url http://127.0.0.1:8000
+```
 
 ## Endpoint chính
 
@@ -122,6 +164,7 @@ Base URL: `/api/v1`. Endpoint cần đăng nhập sử dụng `Authorization: Be
 | Bookings | `/api/v1/bookings` | Đặt lịch lái thử |
 | CRM | `/api/v1/customer-profiles` | Hồ sơ khách hàng |
 | Chat | `/api/v1/conversations` | Hội thoại REST và WebSocket |
+| Media | `/api/v1/catalog-media` | Ảnh của mẫu xe trong danh mục |
 
 WebSocket chat:
 
@@ -135,20 +178,19 @@ Quyền truy cập, payload và mã lỗi: [Đặc tả API](docs/API.md).
 
 ```powershell
 Set-Location backend
+ruff check src tests scripts
 pytest -q
-ruff check src tests
 ```
 
-Test suite bao phủ xác thực, phân quyền, catalog, CRM, chat, OpenAPI contract và ranh giới kiến trúc.
+Mỗi test chạy trên database mới được tạo lại và seed lại, không phụ thuộc thứ tự. Bộ test gồm unit test nghiệp vụ (fake in-memory, không FastAPI/DB) và integration test cho xác thực, phân quyền, catalog, upload, báo giá, lịch lái thử, CRM, địa điểm, chat REST/WebSocket, migration, transaction, ranh giới kiến trúc và hợp đồng OpenAPI.
+
+GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) chạy theo thứ tự: **Ruff → pytest → architecture → OpenAPI contract → Docker build → container smoke test** (kiểm tra non-root, dữ liệu còn sau restart và trạng thái `healthy`).
+
+Khi đổi API, cập nhật snapshot: `python scripts/export_openapi.py`.
 
 ## Kiểm thử tải trên Kaggle CPU
 
-Mục tiêu là tạo baseline Pha 1 trong môi trường CPU cố định:
-
-1. Chạy API với một Uvicorn worker và kiểm tra `/health` trả `200`.
-2. Chạy cùng một kịch bản lần lượt với concurrency `1`, `4` và `8`.
-3. Ghi lại CPU, RAM, throughput, p50/p95 và tỷ lệ lỗi.
-4. Giữ nguyên dataset, thời lượng và cấu hình giữa các lần đo.
+Notebook [loadtest/kaggle_phase1_baseline.ipynb](loadtest/kaggle_phase1_baseline.ipynb) clone đúng commit, ghi metadata (commit, Python, CPU, RAM, database, dataset), warm-up 30 giây, chạy **3 lần × 120 giây ở concurrency 20** với một Uvicorn worker, lưu raw JSON từng lần và bảng median RPS/p50/p95/p99/max/error rate. Kết quả được commit tại `loadtest/results/phase1-baseline/`.
 
 SQLite và một process Uvicorn là cấu hình cơ sở, không phải kiến trúc production cuối cùng. Xem [quy trình Kaggle CPU](docs/KAGGLE_LOAD_TEST.md).
 
@@ -165,8 +207,9 @@ SQLite và một process Uvicorn là cấu hình cơ sở, không phải kiến 
 
 ## Tài liệu
 
-- [Đặc tả API và WebSocket](docs/API.md)
+- [Đặc tả API và WebSocket](docs/API.md) · [OpenAPI snapshot](docs/openapi.json)
 - [Kiến trúc hệ thống](docs/ARCHITECTURE.md)
+- [Bảng nghiệm thu Pha 1](docs/PHASE1_ACCEPTANCE.md)
 - [Phân công backend Pha 1](docs/PHASE1_BACKEND_ASSIGNMENT.md)
 - [Kế hoạch Pha 1 và Pha 2](docs/PHASE_PLAN.md)
 - [Quy trình load test trên Kaggle](docs/KAGGLE_LOAD_TEST.md)

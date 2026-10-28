@@ -2,14 +2,18 @@
 
 ## Definition of Done Pha 1
 
-- Có REST JSON với GET, POST, DELETE; OpenAPI mở được và schema khớp runtime.
-- Business chat không import FastAPI/SQLAlchemy; persistence đi qua repository.
-- Login JWT, protected GET/POST và RBAC tập trung hoạt động đúng.
-- Customer và staff trao đổi realtime; reload trang vẫn đọc được lịch sử.
-- Customer không đọc được hội thoại của customer khác.
-- Docker build được; healthcheck trả database status.
-- `pytest`, lint và Docker healthcheck pass.
-- README, API spec, kiến trúc và hướng dẫn load test khớp code.
+Pha 1 chỉ hoàn thành khi **đồng thời** đạt (theo dõi tại [PHASE1_ACCEPTANCE.md](PHASE1_ACCEPTANCE.md)):
+
+- 100% endpoint công khai đi qua API → use case (`application/`) → repository (`infrastructure/`); `tests/test_architecture.py` pass.
+- Mọi GET và POST được bảo vệ trả 401 khi thiếu token; RBAC tập trung tại `api/dependencies.py`.
+- Docker build và chạy non-root; healthcheck thực sự kiểm tra database (503 khi lỗi); dữ liệu còn sau restart.
+- Swagger khớp runtime (`docs/openapi.json` được test so khớp).
+- CI xanh trên repository **public** hiện tại: Ruff → pytest → architecture → OpenAPI contract → Docker build → container smoke test.
+- Test không `skip` lỗi ứng dụng; mỗi test có database độc lập.
+- Ba lần đo Kaggle có raw evidence, metadata và bảng median; gắn tag `phase1-baseline-v1`.
+- README và tài liệu khớp hoàn toàn với mã nguồn.
+
+Không đưa cache, index, Redis hay nhiều worker vào trước khi có tag baseline.
 
 ## Phân công ba thành viên
 

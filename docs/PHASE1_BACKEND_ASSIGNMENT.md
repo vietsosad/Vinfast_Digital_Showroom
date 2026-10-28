@@ -58,19 +58,19 @@
 ```text
 HTTP request
     ↓
-API/Controller: nhận request, xác thực, chuyển đổi DTO
+api/             Router + Pydantic schema, xác thực qua dependency, map lỗi → HTTP
     ↓
-Business Service: xử lý quy tắc nghiệp vụ thuần
+application/     Use case: quyền nghiệp vụ, điều phối repository, commit một lần
     ↓
-Repository Interface: hợp đồng truy cập dữ liệu
-    ↓
-SQLAlchemy Repository → PostgreSQL
+domain/          Entity, enum trạng thái, quy tắc, Repository/UnitOfWork protocol
+    ↑ implements
+infrastructure/  SQLAlchemy repository → SQLite/PostgreSQL
 ```
 
-- Tầng nghiệp vụ không import FastAPI hoặc SQLAlchemy.
+- `domain/` và `application/` không import FastAPI, Pydantic hoặc SQLAlchemy (kiểm tra bởi `tests/test_architecture.py`).
 - Endpoint chỉ điều phối request/response, không chứa truy vấn cơ sở dữ liệu.
 - Xác thực và phân quyền dùng dependency/middleware chung, không lặp lại trong từng endpoint.
-- Response và lỗi đều dùng JSON; trạng thái lỗi tối thiểu gồm `400`, `401`, `403`, `404`, `409`, `422`.
+- Response và lỗi đều dùng JSON; trạng thái lỗi gồm `401`, `403`, `404`, `409`, `413`, `422` (xem [API.md](API.md)).
 - Swagger tại `/docs`; đặc tả OpenAPI tại `/openapi.json`.
 
 ## Tiêu chí hoàn thành cho mỗi thành viên
