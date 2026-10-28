@@ -1,20 +1,19 @@
-import logging
+"""Reference dataset of VinFast showrooms and charging stations (63 provinces).
+
+The network is generated deterministically (fixed RNG seed) from the province
+table below, so every environment and every load-test run sees identical data.
+"""
+
+from __future__ import annotations
+
 import random
-from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Any
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from src.domain.locations import Location
 
-from src.models.domain import VinfastLocation
-
-logger = logging.getLogger(__name__)
-UTC = timezone.utc
-
-# ==============================================================================
-# HỆ THỐNG MẠNG LƯỚI SHOWROOM & TRẠM SẠC VINFAST / V-GREEN TOÀN QUỐC (63 TỈNH THÀNH)
-# ==============================================================================
-
+# Mỗi tỉnh khai báo tọa độ trung tâm, số địa điểm cần tạo và các quận/phường
+# mẫu; dữ liệu này là đầu vào để sinh mạng lưới địa điểm bên dưới.
 PROVINCES_CONFIG = [
     {"name": "Hà Nội", "lat": 21.0285, "lng": 105.8542, "count": 8, "districts": [{"name": "Nam Từ Liêm", "wards": ["Mễ Trì", "Tây Mỗ"]}, {"name": "Cầu Giấy", "wards": ["Dịch Vọng", "Nghĩa Tân"]}, {"name": "Hai Bà Trưng", "wards": ["Vĩnh Tuy", "Lê Đại Hành"]}, {"name": "Long Biên", "wards": ["Phúc Lợi", "Việt Hưng"]}, {"name": "Gia Lâm", "wards": ["Đa Tốn", "Trâu Quỳ"]}, {"name": "Hà Đông", "wards": ["Mộ Lao", "Văn Quán"]}]},
     {"name": "TP. Hồ Chí Minh", "lat": 10.7769, "lng": 106.7009, "count": 10, "districts": [{"name": "Quận 1", "wards": ["Bến Nghé", "Bến Thành"]}, {"name": "Bình Thạnh", "wards": ["Phường 22", "Phường 19"]}, {"name": "TP. Thủ Đức", "wards": ["Thảo Điền", "An Phú", "Linh Trung"]}, {"name": "Quận 7", "wards": ["Tân Phong", "Phú Mỹ"]}, {"name": "Tân Bình", "wards": ["Phường 2", "Phường 12"]}, {"name": "Gò Vấp", "wards": ["Phường 10", "Phường 7"]}]},
@@ -121,6 +120,7 @@ def _build_full_network() -> list[dict[str, Any]]:
     """Tạo tập dữ liệu Showroom & Trạm sạc chính xác phủ trọn vẹn 63 Tỉnh thành toàn quốc."""
     locations: list[dict[str, Any]] = []
     loc_id_counter = 1
+    # Dùng RNG riêng với seed cố định để dữ liệu mẫu luôn giống nhau giữa các lần chạy.
     rng = random.Random(42)
 
     street_names = [
@@ -139,6 +139,7 @@ def _build_full_network() -> list[dict[str, Any]]:
         districts = prov["districts"]
 
         for i in range(target_count):
+            # Luân phiên quận, phường và mẫu địa điểm để phân bố dữ liệu đa dạng.
             dist_obj = districts[i % len(districts)]
             district_name = dist_obj["name"]
             wards = dist_obj.get("wards", [])
@@ -153,11 +154,13 @@ def _build_full_network() -> list[dict[str, Any]]:
 
             name = archetype["name_template"].format(district=district_name, ward=ward_name)
 
+            # Tạo tọa độ giả lập gần tâm tỉnh; đây không phải tọa độ vị trí thực tế.
             radius = rng.uniform(0.005, 0.04)
             angle = rng.uniform(0, 6.28318)
             latitude = round(center_lat + radius * 0.7 * (1.0 if angle < 3.14 else -1.0) * (rng.random() * 0.8 + 0.2), 6)
             longitude = round(center_lng + radius * (1.0 if (1.57 < angle < 4.71) else -1.0) * (rng.random() * 0.8 + 0.2), 6)
 
+            # Số cổng và số cổng còn trống được sinh trong phạm vi của từng mẫu.
             total_ports = rng.randint(*archetype["ports_range"])
             available_ports = max(1, int(total_ports * rng.uniform(0.5, 0.85)))
 
@@ -191,7 +194,7 @@ def _build_full_network() -> list[dict[str, Any]]:
             }
             locations.append(loc_entry)
 
-    # Thêm 3 hub cao tốc huyết mạch
+    # Bổ sung riêng 3 hub cao tốc có thông tin cố định, không sinh ngẫu nhiên.
     expressway_hubs = [
         {
             "id": "vf-ct-mai-son-ql45",
@@ -231,184 +234,31 @@ def _build_full_network() -> list[dict[str, Any]]:
 
     return locations
 
-AUTHENTIC_VINFAST_LOCATIONS = _build_full_network()
+
+@lru_cache(maxsize=1)
+def _raw_dataset() -> tuple[dict[str, Any], ...]:
+    # Cache dữ liệu thô để tránh sinh lại mạng lưới mỗi lần gọi.
+    return tuple(_build_full_network())
 
 
-def _format_location_point(loc: VinfastLocation) -> dict[str, Any]:
-    """Chuyển đổi ORM Model thành định dạng MapPoint khớp với giao diện Frontend."""
-    return {
-        "id": loc.id,
-        "name": loc.name,
-        "types": loc.types,
-        "typeLabel": loc.type_label,
-        "province": loc.province,
-        "district": loc.district,
-        "ward": loc.ward,
-        "address": loc.address,
-        "coordinates": {
-            "lat": loc.latitude,
-            "lng": loc.longitude,
-        },
-        "phone": loc.phone,
-        "hotlineService": loc.hotline_service,
-        "openingHours": loc.opening_hours,
-        "chargingInfo": loc.charging_info,
-        "source": loc.source,
-    }
-
-
-_is_synced_flag = False
-
-async def seed_vinfast_locations_if_empty(db: AsyncSession) -> int:
-    """Tự động kiểm tra và seed dữ liệu nếu bảng đang trống."""
-    global _is_synced_flag
-    if _is_synced_flag:
-        return len(AUTHENTIC_VINFAST_LOCATIONS)
-
-    try:
-        count_res = await db.execute(select(func.count()).select_from(VinfastLocation))
-        total_count = count_res.scalar_one_or_none() or 0
-
-        if total_count == 0:
-            logger.info("Initializing authentic VinFast locations table...")
-            sync_res = await sync_vinfast_locations_dataset(db)
-            _is_synced_flag = True
-            return sync_res.get("total_synced", len(AUTHENTIC_VINFAST_LOCATIONS))
-        _is_synced_flag = True
-        return total_count
-    except Exception as e:
-        logger.error(f"Error seeding VinFast locations: {e}")
-        await db.rollback()
-        return 0
-
-
-async def get_all_locations(
-    db: AsyncSession,
-    demand_type: str | None = None,
-    province: str | None = None,
-    search: str | None = None,
-) -> list[dict[str, Any]]:
-    """Lấy danh sách Showroom & Trạm sạc với các bộ lọc tuỳ chọn siêu tốc."""
-    try:
-        query = select(VinfastLocation).where(VinfastLocation.is_active.is_(True))
-
-        if province and province.strip() and province.strip().lower() != "tất cả tỉnh thành":
-            query = query.where(VinfastLocation.province.ilike(f"%{province.strip()}%"))
-
-        if search and search.strip():
-            term = f"%{search.strip()}%"
-            query = query.where(
-                or_(
-                    VinfastLocation.name.ilike(term),
-                    VinfastLocation.address.ilike(term),
-                    VinfastLocation.district.ilike(term),
-                    VinfastLocation.province.ilike(term),
-                )
-            )
-
-        result = await db.execute(query.order_by(VinfastLocation.province, VinfastLocation.name))
-        records = result.scalars().all()
-
-        if len(records) == 0 and not province and not search:
-            return [_format_dict_point(d) for d in AUTHENTIC_VINFAST_LOCATIONS]
-
-        locations = []
-        for loc in records:
-            if demand_type and demand_type.strip():
-                target_types = [t.strip() for t in demand_type.split(",") if t.strip()]
-                if not any(t in (loc.types or []) for t in target_types):
-                    continue
-            locations.append(_format_location_point(loc))
-
-        return locations
-    except Exception as e:
-        logger.error(f"Error querying locations: {e}")
-        return [_format_dict_point(d) for d in AUTHENTIC_VINFAST_LOCATIONS]
-
-
-def _format_dict_point(data: dict[str, Any]) -> dict[str, Any]:
-    """Format dictionary entry as MapPoint."""
-    return {
-        "id": data["id"],
-        "name": data["name"],
-        "types": data["types"],
-        "typeLabel": data.get("type_label", "Trạm Sạc & Showroom VinFast"),
-        "province": data["province"],
-        "district": data["district"],
-        "ward": data.get("ward"),
-        "address": data["address"],
-        "coordinates": {
-            "lat": data["latitude"],
-            "lng": data["longitude"],
-        },
-        "phone": data.get("phone"),
-        "hotlineService": data.get("hotline_service"),
-        "openingHours": data.get("opening_hours", "Hoạt động 24/7"),
-        "chargingInfo": data.get("charging_info"),
-        "source": "vinfast_official",
-    }
-
-
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-
-async def sync_vinfast_locations_dataset(db: AsyncSession) -> dict[str, Any]:
-    """Cập nhật / Đồng bộ siêu tốc toàn bộ dữ liệu vị trí chính thức vào Database bằng PostgreSQL Bulk Upsert."""
-    try:
-        values_list = []
-        for data in AUTHENTIC_VINFAST_LOCATIONS:
-            values_list.append({
-                "id": data["id"],
-                "name": data["name"],
-                "types": data["types"],
-                "type_label": data.get("type_label", "Trạm Sạc & Showroom VinFast"),
-                "province": data["province"],
-                "district": data["district"],
-                "ward": data.get("ward"),
-                "address": data["address"],
-                "latitude": data["latitude"],
-                "longitude": data["longitude"],
-                "phone": data.get("phone"),
-                "hotline_service": data.get("hotline_service"),
-                "opening_hours": data.get("opening_hours", "08:00 - 22:00 (Trạm sạc 24/7)"),
-                "charging_info": data.get("charging_info"),
-                "source": "vinfast_official",
-                "is_active": True,
-                "updated_at": datetime.now(UTC),
-            })
-
-        chunk_size = 200
-        for i in range(0, len(values_list), chunk_size):
-            chunk = values_list[i : i + chunk_size]
-            stmt = pg_insert(VinfastLocation).values(chunk)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=[VinfastLocation.id],
-                set_={
-                    "name": stmt.excluded.name,
-                    "types": stmt.excluded.types,
-                    "type_label": stmt.excluded.type_label,
-                    "province": stmt.excluded.province,
-                    "district": stmt.excluded.district,
-                    "ward": stmt.excluded.ward,
-                    "address": stmt.excluded.address,
-                    "latitude": stmt.excluded.latitude,
-                    "longitude": stmt.excluded.longitude,
-                    "phone": stmt.excluded.phone,
-                    "hotline_service": stmt.excluded.hotline_service,
-                    "opening_hours": stmt.excluded.opening_hours,
-                    "charging_info": stmt.excluded.charging_info,
-                    "updated_at": stmt.excluded.updated_at,
-                },
-            )
-            await db.execute(stmt)
-
-        await db.commit()
-        return {
-            "status": "success",
-            "message": f"Successfully synchronized {len(values_list)} VinFast locations with official dataset.",
-            "total_synced": len(values_list),
-        }
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Failed to sync locations: {e}")
-        return {"status": "error", "message": str(e)}
+def official_locations() -> list[Location]:
+    # Chuyển dữ liệu thô sang model domain; sao chép list/dict để tránh chia sẻ mutable.
+    return [
+        Location(
+            id=item["id"],
+            name=item["name"],
+            types=list(item["types"]),
+            type_label=item.get("type_label", "Trạm Sạc & Showroom VinFast"),
+            province=item["province"],
+            district=item["district"],
+            ward=item.get("ward"),
+            address=item["address"],
+            latitude=item["latitude"],
+            longitude=item["longitude"],
+            phone=item.get("phone"),
+            hotline_service=item.get("hotline_service"),
+            opening_hours=item.get("opening_hours", "08:00 - 22:00 (Trạm sạc 24/7)"),
+            charging_info=dict(item["charging_info"]) if item.get("charging_info") else None,
+        )
+        for item in _raw_dataset()
+    ]
