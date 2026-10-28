@@ -32,18 +32,21 @@ Thumbs.db
 /data/*
 !/data/catalog/
 !/data/catalog/*.csv
+!/data/catalog/*.json
 !frontend/src/data/
 *.db
 *.sqlite3
 
-# Logs
+# Logs (Kaggle server logs are part of the load-test evidence)
 logs/
 *.log
+!/loadtest/results/**/server.log
 
 # Test coverage
 htmlcov/
 .coverage
 coverage.xml
+backend/reports/
 
 # Docker
 docker-compose.override.yml
@@ -62,3 +65,4 @@ out/
 
 .vercel
 .env*
+!.env.example

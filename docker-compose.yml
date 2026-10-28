@@ -3,17 +3,23 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    image: vinfast-showroom-backend:local
     ports:
-      - "8000:8000"
+      - "${HOST_PORT:-8000}:8000"
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:////app/data/vinfast.db
-      - APP_ENV=${APP_ENV:-development}
-      - SECRET_KEY=${SECRET_KEY:-change-this-development-secret}
+      APP_ENV: ${APP_ENV:-development}
+      SECRET_KEY: ${SECRET_KEY:-change-this-development-secret-key}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000}
     volumes:
-      - ./data:/app/data
+      # Named volume: created with the image's ownership, so the non-root user can write it.
+      - showroom-data:/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
       retries: 3
+      start_period: 20s
+
+volumes:
+  showroom-data:
