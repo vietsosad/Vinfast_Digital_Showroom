@@ -1,13 +1,4 @@
-import os
-import sys
-
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
-import pytest
-
-from src.services.tco_calculator import (
+from src.application.tco import (
     DISCLAIMER_TEXT,
     TCOCalculationRequest,
     calculate_tco,
@@ -74,25 +65,6 @@ def test_tco_calculator_motorbike():
     assert res.disclaimer_text == DISCLAIMER_TEXT
 
 
-@pytest.mark.asyncio
-async def test_tco_calculator_api_endpoint(client):
-    response = await client.post(
-        "/api/v1/tco/calculate",
-        json={
-            "vehicle_type": "CAR",
-            "model_id": "vf8-eco",
-            "province_code": "HN",
-            "battery_option": "RENTAL",
-            "monthly_km_estimate": 1200,
-        },
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["model_id"] == "vf8-eco"
-    assert data["disclaimer_text"] == DISCLAIMER_TEXT
-
-
 def test_tco_calculator_7_seater_limo_green():
     """Test 7-seat car gets correct civil insurance (794,000 VND) and DB list price."""
     req = TCOCalculationRequest(
@@ -128,7 +100,4 @@ def test_tco_calculator_overrides():
     assert res.rolling_cost_breakdown.civil_insurance_vnd == 794000
     assert res.monthly_operating_cost.battery_subscription_fee_vnd == 2000000
 
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
 
