@@ -1,6 +1,18 @@
 # Đặc tả API
 
-Base URL chuẩn: `/api/v1`. Mọi request và response dùng **JSON**, trừ ba endpoint tải ảnh nhận `multipart/form-data` (đánh dấu 📎 bên dưới). Swagger UI tại `/docs`; đặc tả máy đọc được tại `/openapi.json` và bản snapshot [openapi.json](openapi.json) (được test so khớp với runtime). Schema chi tiết của từng request/response luôn lấy từ OpenAPI.
+Base URL chuẩn: `/api/v1`. Mọi request và response dùng **JSON**, trừ ba endpoint tải ảnh nhận `multipart/form-data` (đánh dấu 📎 bên dưới). Schema chi tiết của từng request/response luôn lấy từ OpenAPI.
+
+## Đặc tả OpenAPI và cách xem trước
+
+[openapi.json](openapi.json) là đặc tả OpenAPI 3.1 máy đọc được (46 operation, 51 schema, security scheme `HTTPBearer`). `tests/test_openapi_snapshot.py` bảo đảm file luôn khớp với runtime; khi đổi API, chạy `python backend/scripts/export_openapi.py` để cập nhật.
+
+| Cách xem | Địa chỉ |
+|---|---|
+| ReDoc, không cần chạy server | <https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/vietsosad/Vinfast_Digital_Showroom/main/docs/openapi.json> |
+| Swagger Editor, không cần chạy server | <https://editor.swagger.io/?url=https://raw.githubusercontent.com/vietsosad/Vinfast_Digital_Showroom/main/docs/openapi.json> |
+| Swagger UI khi chạy server (gọi thử được) | `http://localhost:8000/docs` |
+| ReDoc khi chạy server | `http://localhost:8000/redoc` |
+| JSON runtime | `http://localhost:8000/openapi.json` |
 
 ## Xác thực
 
