@@ -12,7 +12,7 @@ from src.services.security import create_access_token, get_current_user, hash_pa
 
 router = APIRouter()
 
-
+# Đăng ký tài khoản mới
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(Account).where(Account.email == payload.email.lower()))
@@ -40,6 +40,7 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)):
     return new_user
 
 
+# Xác thực thông tin đăng nhập và cấp access token
 @router.post("/login", response_model=TokenResponse)
 async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Account).where(Account.email == payload.email.lower()))
@@ -61,11 +62,13 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
     return TokenResponse(access_token=access_token, token_type="bearer", user=UserResponse.model_validate(user))
 
 
+# Trả về thông tin tài khoản đang đăng nhập
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: Account = Depends(get_current_user)):
     return current_user
 
 
+# Liệt kê tài khoản, chỉ dành cho quản trị viên
 @router.get("/users", response_model=list[UserResponse])
 async def get_all_users(
     current_user: Account = Depends(require_roles(["admin"])),
@@ -75,6 +78,7 @@ async def get_all_users(
     return result.scalars().all()
 
 
+# Tạo tài khoản nhân viên, chỉ dành cho quản trị viên
 @router.post("/create-staff", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_staff_by_admin(
     payload: UserRegister,
@@ -161,6 +165,7 @@ async def update_user(
 
 
 
+# Xóa tài khoản, chỉ dành cho quản trị viên
 @router.delete("/users/{user_id}")
 async def delete_user_by_admin(
     user_id: uuid.UUID,
