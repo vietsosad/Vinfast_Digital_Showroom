@@ -17,7 +17,9 @@ Bảng này đối chiếu từng yêu cầu của đề bài với bằng chứ
 | Bảo mật | Xác thực qua middleware/dependency, không lặp trong endpoint | `api/dependencies.py::get_current_user`, `require_roles`; `test_security_declarations_match_the_access_policy` | ✅ |
 | Triển khai | Đóng gói Docker | CI job `docker`: build → smoke → non-root → restart giữ dữ liệu → `healthy` | ✅ CI job `docker` xanh trên `main` |
 | Chung | GitHub công khai, commit cẩn thận | Repository [vietsosad/Vinfast_Digital_Showroom](https://github.com/vietsosad/Vinfast_Digital_Showroom) ở chế độ Public; commit theo Conventional Commits; CI chạy trên mọi lần push | ✅ |
-| Chung | README mô tả kiến trúc và đặc tả | [README.md](../README.md), [API.md](API.md), [ARCHITECTURE.md](ARCHITECTURE.md) | ✅ |
+| Chung | README mô tả kiến trúc và đặc tả, dài 1–4 trang | [README.md](../README.md) (~1.500 từ): bài toán, nghiệp vụ, kiến trúc, tổ chức mã nguồn, đặc tả API, cách chạy và kiểm thử; chi tiết ở [API.md](API.md), [ARCHITECTURE.md](ARCHITECTURE.md) | ✅ |
+| Chung | Đặc tả API dạng `.json`/`.yaml` xem trước được | [openapi.json](openapi.json) hợp lệ OpenAPI 3.1; xem trước bằng `/docs`, `/redoc` hoặc ReDoc/Swagger Editor qua URL raw (link trong README) | ✅ |
+| Chung | Thuyết trình 5–7 phút: bài toán, nghiệp vụ, vấn đề dễ thấy, tổ chức mã nguồn, framework, yêu cầu kỹ thuật | [PHASE1_PRESENTATION.md](PHASE1_PRESENTATION.md) | ✅ |
 | Chung | Chỉ chức năng cơ bản, chưa tối ưu | Không cache/pagination/multi-worker; ghi rõ trong ARCHITECTURE | ✅ |
 | Chung | Kiểm thử tải trên Kaggle CPU | Notebook + script sẵn sàng; **chưa có số đo Kaggle** | ⏳ |
 
