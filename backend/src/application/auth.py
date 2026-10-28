@@ -25,6 +25,7 @@ from src.domain.errors import (
 from src.domain.identity import Actor, Role
 from src.domain.unit_of_work import UnitOfWork
 
+
 # thông tin đăng ký tài khoản mới, được gửi từ client đến server
 @dataclass(frozen=True)
 class Registration:

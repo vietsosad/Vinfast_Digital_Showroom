@@ -1,17 +1,12 @@
 from fastapi import APIRouter
 
-from src.services.tco_calculator import (
-    TCOCalculationRequest,
-    TCOCalculationResponse,
-    calculate_tco,
-)
+from src.api.schemas.tco import TCOCalculationRequest, TCOCalculationResponse
+from src.application import tco
 
-# Nhóm các endpoint API liên quan đến tính toán tổng chi phí sở hữu xe.
 router = APIRouter()
 
 
-# Nhận tham số tính TCO, gọi bộ tính toán và trả kết quả theo response schema.
-@router.post("/calculate", response_model=TCOCalculationResponse)
-async def calculate_tco_endpoint(request: TCOCalculationRequest) -> TCOCalculationResponse:
-    """Gọi Python Tool tính TCO lăn bánh & chi phí sạc/tháng."""
-    return calculate_tco(request)
+@router.post("/calculate", response_model=TCOCalculationResponse, summary="Ước tính chi phí lăn bánh và vận hành")
+async def calculate_tco(payload: TCOCalculationRequest) -> TCOCalculationResponse:
+    result = tco.calculate_tco(tco.TCOCalculationRequest(**payload.model_dump()))
+    return TCOCalculationResponse.model_validate(result)

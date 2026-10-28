@@ -1,185 +1,112 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, status
 
-from src.models.domain import Account
-from src.models.schemas import TokenResponse, UserLogin, UserRegister, UserResponse, UserUpdate
-from src.services.customer_profile_service import sync_from_account_register
-from src.services.database import get_db
-from src.services.security import create_access_token, get_current_user, hash_password, require_roles, verify_password
+from src.api.dependencies import get_auth_service, get_current_user, require_admin
+from src.api.schemas.auth import (
+    ProfileUpdate,
+    StaffCreate,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
+    UserResponse,
+    UserUpdate,
+)
+from src.api.schemas.common import MessageResponse, errors
+from src.application.auth import AccountChanges, AuthService, Registration
+from src.domain.accounts import Account
+from src.domain.identity import Role
 
 router = APIRouter()
 
-# Đăng ký tài khoản mới
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)):
-    existing = await db.execute(select(Account).where(Account.email == payload.email.lower()))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email này đã được đăng ký trong hệ thống!",
-        )
 
-    new_user = Account(
-        email=payload.email.lower(),
-        phone=payload.phone,
-        password_hash=hash_password(payload.password),
-        full_name=payload.full_name,
-        role="customer",
-        status="active",
+def _registration(payload: UserRegister) -> Registration:
+    return Registration(
+        email=payload.email, phone=payload.phone, password=payload.password, full_name=payload.full_name
     )
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
-
-    # Tự động tạo / liên kết hồ sơ khách hàng 360°
-    await sync_from_account_register(db, new_user)
-
-    return new_user
 
 
-# Xác thực thông tin đăng nhập và cấp access token
-@router.post("/login", response_model=TokenResponse)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Account).where(Account.email == payload.email.lower()))
-    user = result.scalar_one_or_none()
-
-    if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email hoặc mật khẩu không chính xác!",
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tài khoản đã bị khóa!",
-        )
-
-    access_token = create_access_token(data={"sub": str(user.user_id), "role": user.role})
-    return TokenResponse(access_token=access_token, token_type="bearer", user=UserResponse.model_validate(user))
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Đăng ký tài khoản khách hàng",
+    responses=errors(409),
+)
+async def register(payload: UserRegister, auth: AuthService = Depends(get_auth_service)) -> Account:
+    return await auth.register_customer(_registration(payload))
 
 
-# Trả về thông tin tài khoản đang đăng nhập
-@router.get("/me", response_model=UserResponse)
-async def get_me(current_user: Account = Depends(get_current_user)):
+@router.post("/login", response_model=TokenResponse, summary="Đăng nhập và nhận JWT", responses=errors(401, 403))
+async def login(payload: UserLogin, auth: AuthService = Depends(get_auth_service)) -> TokenResponse:
+    result = await auth.login(payload.email, payload.password)
+    return TokenResponse(access_token=result.access_token, user=UserResponse.model_validate(result.account))
+
+
+@router.get("/me", response_model=UserResponse, summary="Tài khoản hiện tại", responses=errors(401))
+async def get_me(current_user: Account = Depends(get_current_user)) -> Account:
     return current_user
 
 
-# Liệt kê tài khoản, chỉ dành cho quản trị viên
-@router.get("/users", response_model=list[UserResponse])
-async def get_all_users(
-    current_user: Account = Depends(require_roles(["admin"])),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Account).order_by(Account.created_at.desc()))
-    return result.scalars().all()
-
-
-# Tạo tài khoản nhân viên, chỉ dành cho quản trị viên
-@router.post("/create-staff", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_staff_by_admin(
-    payload: UserRegister,
-    current_user: Account = Depends(require_roles(["admin"])),
-    db: AsyncSession = Depends(get_db),
-):
-    existing = await db.execute(select(Account).where(Account.email == payload.email.lower()))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email này đã được đăng ký trong hệ thống!",
-        )
-
-    new_staff = Account(
-        email=payload.email.lower(),
-        phone=payload.phone,
-        password_hash=hash_password(payload.password),
-        full_name=payload.full_name,
-        role=payload.role if payload.role in ["consultant", "admin"] else "consultant",
-        status="active",
-    )
-    db.add(new_staff)
-    await db.commit()
-    await db.refresh(new_staff)
-    return new_staff
-
-
-@router.put("/me", response_model=UserResponse)
+@router.put("/me", response_model=UserResponse, summary="Cập nhật hồ sơ cá nhân", responses=errors(401, 409))
 async def update_my_profile(
-    payload: UserUpdate,
+    payload: ProfileUpdate,
     current_user: Account = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Cho phép người dùng tự cập nhật thông tin cá nhân của chính mình (Họ tên, SĐT, Mật khẩu)."""
-    if payload.full_name is not None:
-        current_user.full_name = payload.full_name
-    if payload.phone is not None:
-        current_user.phone = payload.phone
-    if payload.password:
-        current_user.password_hash = hash_password(payload.password)
-
-    await db.commit()
-    await db.refresh(current_user)
-    return current_user
+    auth: AuthService = Depends(get_auth_service),
+) -> Account:
+    changes = AccountChanges(**payload.model_dump(exclude_unset=True))
+    return await auth.update_account(current_user.actor, current_user.user_id, changes)
 
 
-@router.put("/users/{user_id}", response_model=UserResponse)
+@router.get("/users", response_model=list[UserResponse], summary="Danh sách tài khoản", responses=errors(401, 403))
+async def list_users(
+    current_user: Account = Depends(require_admin),
+    auth: AuthService = Depends(get_auth_service),
+) -> list[Account]:
+    return await auth.list_accounts(current_user.actor)
+
+
+@router.post(
+    "/create-staff",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Admin tạo tài khoản nhân viên",
+    responses=errors(401, 403, 409),
+)
+async def create_staff(
+    payload: StaffCreate,
+    current_user: Account = Depends(require_admin),
+    auth: AuthService = Depends(get_auth_service),
+) -> Account:
+    return await auth.create_staff(current_user.actor, _registration(payload), Role(payload.role))
+
+
+@router.put(
+    "/users/{user_id}",
+    response_model=UserResponse,
+    summary="Sửa tài khoản (chính mình hoặc admin)",
+    responses=errors(401, 403, 404, 409),
+)
 async def update_user(
     user_id: uuid.UUID,
     payload: UserUpdate,
     current_user: Account = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Cập nhật thông tin tài khoản: Người dùng sửa chính mình hoặc Admin sửa mọi tài khoản."""
-    if current_user.user_id != user_id and current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Bạn không có quyền sửa thông tin của tài khoản khác!",
-        )
-
-    res = await db.execute(select(Account).where(Account.user_id == user_id))
-    user = res.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản này!")
-
-    if payload.full_name is not None:
-        user.full_name = payload.full_name
-    if payload.phone is not None:
-        user.phone = payload.phone
-
-    # Chỉ Admin mới có quyền đổi vai trò hoặc khóa/mở khóa tài khoản
-    if current_user.role == "admin":
-        if payload.role is not None:
-            user.role = payload.role
-        if payload.is_active is not None:
-            user.status = "active" if payload.is_active else "inactive"
-
-    if payload.password:
-        user.password_hash = hash_password(payload.password)
-
-    await db.commit()
-    await db.refresh(user)
-    return user
+    auth: AuthService = Depends(get_auth_service),
+) -> Account:
+    changes = AccountChanges(**payload.model_dump(exclude_unset=True))
+    return await auth.update_account(current_user.actor, user_id, changes)
 
 
-
-# Xóa tài khoản, chỉ dành cho quản trị viên
-@router.delete("/users/{user_id}")
-async def delete_user_by_admin(
+@router.delete(
+    "/users/{user_id}",
+    response_model=MessageResponse,
+    summary="Admin xóa tài khoản",
+    responses=errors(401, 403, 404, 409),
+)
+async def delete_user(
     user_id: uuid.UUID,
-    current_user: Account = Depends(require_roles(["admin"])),
-    db: AsyncSession = Depends(get_db),
-):
-    if current_user.user_id == user_id:
-        raise HTTPException(status_code=400, detail="Không thể tự xóa tài khoản Admin đang đăng nhập!")
-
-    res = await db.execute(select(Account).where(Account.user_id == user_id))
-    user = res.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản này!")
-
-    await db.delete(user)
-    await db.commit()
-    return {"message": "Đã xóa tài khoản thành công"}
+    current_user: Account = Depends(require_admin),
+    auth: AuthService = Depends(get_auth_service),
+) -> MessageResponse:
+    await auth.delete_account(current_user.actor, user_id)
+    return MessageResponse(message="Đã xóa tài khoản thành công")

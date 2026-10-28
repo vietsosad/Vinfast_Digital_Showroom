@@ -59,12 +59,14 @@ def checksum(path: Path) -> str:
 async def seed_media() -> None:
     from sqlalchemy import select
 
-    from src.models.domain import Base, CarCatalog, MotorbikeCatalog, VehicleMedia
-    from src.services.database import SessionLocal, engine
+    from src.infrastructure.bootstrap import create_schema
+    from src.infrastructure.database import SessionLocal, engine
+    from src.infrastructure.orm import CarRow as CarCatalog
+    from src.infrastructure.orm import MotorbikeRow as MotorbikeCatalog
+    from src.infrastructure.orm import VehicleMediaRow as VehicleMedia
 
     # Đảm bảo các bảng cần thiết tồn tại trước khi tạo bản ghi ảnh.
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+    await create_schema()
 
     inserted = skipped = 0
     async with SessionLocal() as session:
@@ -140,11 +142,6 @@ async def seed_media() -> None:
     await engine.dispose()
 
 
-# Chuyển URL PostgreSQL mặc định sang dialect async mà ứng dụng sử dụng.
-def normalize_database_url(url: str) -> str:
-    if url.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + url.removeprefix("postgresql://")
-    return url
 
 
 # Đọc tùy chọn dòng lệnh và khởi chạy seed bất đồng bộ.
@@ -153,7 +150,7 @@ def main() -> None:
     parser.add_argument("--database-url")
     args = parser.parse_args()
     if args.database_url:
-        os.environ["DATABASE_URL"] = normalize_database_url(args.database_url)
+        os.environ["DATABASE_URL"] = args.database_url
     asyncio.run(seed_media())
 
 
