@@ -146,7 +146,7 @@ Set-Location backend; uvicorn src.main:app --reload --port 8000
 
 Khi khởi động, ứng dụng tự tạo bảng, chạy migration idempotent và nạp catalog cùng mạng lưới địa điểm nếu bảng đang rỗng; ngoài production còn tạo tài khoản demo cho từng vai trò. Khách hàng mới tự đăng ký bằng `POST /api/v1/auth/register` rồi đăng nhập bằng `POST /api/v1/auth/login`.
 
-## 9. Kiểm thử, CI và kiểm thử tải
+## 9. Kiểm thử và CI
 
 ```powershell
 Set-Location backend; ruff check src tests scripts; pytest -q
@@ -154,27 +154,51 @@ Set-Location backend; ruff check src tests scripts; pytest -q
 
 - 120 test, mỗi test dùng database riêng: unit test nghiệp vụ với fake in-memory và integration test cho mọi nhóm endpoint, WebSocket, migration, transaction, kiến trúc, hợp đồng OpenAPI.
 - [GitHub Actions](.github/workflows/ci.yml): Ruff → pytest → kiến trúc → OpenAPI contract → Docker build → smoke test container (non-root, dữ liệu còn sau restart, `healthy`).
-- [Kaggle CPU](docs/KAGGLE_LOAD_TEST.md): [notebook](https://www.kaggle.com/code/hoangviethehe/phase-1-baseline-kaggle-cpu-load-test?scriptVersionId=363226232) clone đúng commit, warm-up 30 giây rồi chạy 3 lần × 120 giây ở concurrency 20 với một Uvicorn worker.
 
-Baseline Pha 1 đo trên Kaggle CPU ngày 2026-10-28 tại commit `545e229` (tag [`phase1-baseline-v1`](https://github.com/vietsosad/Vinfast_Digital_Showroom/tree/phase1-baseline-v1)):
+## 10. Kiểm thử tải trên Kaggle CPU (baseline Pha 1)
 
-| RPS (median) | p50 | p95 | p99 | Lỗi | Dao động RPS giữa 3 lần |
-|---:|---:|---:|---:|---:|---:|
-| 53.5 | 268 ms | 900 ms | 968 ms | 0 / 19 350 request | 1.3 % |
+**Cấu hình:** Kaggle Notebook CPU (Accelerator `None`, Intel Xeon 2.20 GHz, 4 vCPU); Python 3.13, SQLite, **1 Uvicorn worker**; backend và công cụ tạo tải chạy **cùng máy**. Script [`load_test.py`](backend/scripts/load_test.py): **20 kết nối đồng thời** xoay vòng `/health`, `/cars`, `/motorbikes`, `/locations`; warm-up 30 giây rồi **3 lần × 120 giây**; commit `545e229`, ngày 2026-10-28.
 
-Số liệu thô, metadata, access log và cách đọc kết quả: [loadtest/results/phase1-baseline/](loadtest/results/phase1-baseline/README.md).
+| Chỉ số | Kết quả |
+|---|---:|
+| Tổng request (3 lần đo) | 19 350, lỗi **0 %** |
+| Throughput (median) | **53.47 req/s**, dao động 1.3 % |
+| Latency p50 / p95 / p99 (median) | **268 / 900 / 968 ms**, max 1 248 ms |
+| CPU trung bình / RAM tối đa của server | ~1.8 vCPU / ~107 MB |
 
-## 10. Giới hạn có chủ đích của Pha 1
+**Bằng chứng:** [Kaggle version 363226232](https://www.kaggle.com/code/hoangviethehe/phase-1-baseline-kaggle-cpu-load-test?scriptVersionId=363226232); raw JSON, metadata, access log và giải thích trong [loadtest/results/phase1-baseline/](loadtest/results/phase1-baseline/README.md); tag [`phase1-baseline-v1`](https://github.com/vietsosad/Vinfast_Digital_Showroom/tree/phase1-baseline-v1). Đây **chỉ là baseline Pha 1** để so sánh trước/sau, không phải năng lực production. Quy trình: [docs/KAGGLE_LOAD_TEST.md](docs/KAGGLE_LOAD_TEST.md).
 
-Pha 1 ưu tiên tính đúng và khả năng kiểm thử, **chưa tối ưu** để có baseline đo được: SQLite và một Uvicorn worker, catalog trả toàn bộ danh sách, WebSocket quản lý trong bộ nhớ một process, JWT 7 ngày chưa có thu hồi hay rate limit, migration tự viết thay vì Alembic, ảnh lưu trên đĩa cục bộ.
+## 11. Hạn chế hiện tại và hướng phát triển (Pha 2)
 
-## 11. Tài liệu
+### Hạn chế hiện tại
+
+Pha 1 **cố ý chưa tối ưu** để có baseline đo được:
+
+- **Hiệu năng đọc:** 1 worker, SQLite; danh sách xe và địa điểm trả toàn bộ, chưa phân trang hay cache; p95 gấp ~3.4 lần p50.
+- **Realtime:** WebSocket quản lý trong bộ nhớ một process, chưa chạy được nhiều worker.
+- **Tin cậy:** tin nhắn commit rồi mới broadcast; process dừng giữa hai bước thì client đang mở socket không nhận được (vẫn đọc lại qua REST).
+- **Bảo mật và vận hành:** JWT 7 ngày, chưa có refresh, thu hồi hay rate limit; migration tự viết, ảnh lưu đĩa cục bộ, chưa có metrics.
+- **Phạm vi đo:** mới đo 4 endpoint GET với latency gộp; chưa đo thao tác ghi, WebSocket hay từng endpoint.
+
+### Hướng phát triển Pha 2
+
+Chọn kiến trúc theo từng hạn chế đã đo và đánh giá **trước/sau trên cùng cấu hình Kaggle CPU** (cùng notebook, dataset, concurrency; chỉ đổi commit). Mỗi thí nghiệm một giả thuyết, một thay đổi, 3 lần × 120 giây; chỉ giữ khi chênh lệch vượt mức dao động 1.3 % và lỗi không tăng, nếu không thì rollback và giải thích.
+
+| Bài toán | Lý do | Kiến trúc đề xuất | Chỉ số trước/sau | Giữ khi |
+|---|---|---|---|---|
+| A. Đọc catalog | p95 900 ms; trả toàn bộ danh sách | Pagination + index, cache có TTL | RPS, p50/p95/p99, lỗi | p95 ≤ ~630 ms (−30 %) |
+| B. Chat nhiều worker | Connection manager một process | Redis Pub/Sub, ≥ 2 worker | p95 delivery, tin mất/trùng | p95 < 300 ms, không mất tin |
+| C. Tin cậy sự kiện (nếu B lộ lỗi) | Commit rồi mới broadcast | Transactional outbox + idempotency key | Tỉ lệ mất/trùng, thời gian phục hồi | Không mất, không trùng |
+
+Bước đầu là đo riêng từng endpoint để xác định nút thắt thật. Trade-off ghi cùng kết quả: cache làm dữ liệu trễ tối đa bằng TTL, index tăng chi phí ghi, nhiều worker tốn thêm RAM và cần Redis. Chi tiết: [PHASE_PLAN.md](docs/PHASE_PLAN.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md#thuộc-tính-chất-lượng-pha-2).
+
+## 12. Tài liệu
 
 - [Thuyết trình Pha 1](docs/PHASE1_PRESENTATION.md) — bài toán, nghiệp vụ, vấn đề dễ thấy, tổ chức mã nguồn, yêu cầu kỹ thuật
 - [Đặc tả API](docs/API.md) · [OpenAPI](docs/openapi.json) · [Kiến trúc](docs/ARCHITECTURE.md) · [Nghiệm thu Pha 1](docs/PHASE1_ACCEPTANCE.md)
 - [Load test Kaggle](docs/KAGGLE_LOAD_TEST.md) · [Kết quả baseline](loadtest/results/phase1-baseline/README.md) · [Phân công](docs/PHASE1_BACKEND_ASSIGNMENT.md) · [Kế hoạch](docs/PHASE_PLAN.md)
 
-## 12. Nhóm phát triển
+## 13. Nhóm phát triển
 
 | Thành viên | Phụ trách |
 |---|---|
